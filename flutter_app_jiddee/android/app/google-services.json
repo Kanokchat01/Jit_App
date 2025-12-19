@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "16970278870",
+    "project_id": "jiddeeapp",
+    "storage_bucket": "jiddeeapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:16970278870:android:a2cf4fe806210910fb6677",
+        "android_client_info": {
+          "package_name": "com.example.flutter_app_jiddee"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAESnwk-pypvMCocLTN1K6MHXhRYGh1lgM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
