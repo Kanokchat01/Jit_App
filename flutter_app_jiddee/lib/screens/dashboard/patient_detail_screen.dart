@@ -16,13 +16,18 @@ class PatientDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(patient.name, style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              patient.name,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text('UID: ${patient.uid}'),
             const SizedBox(height: 8),
             Text('Last risk: $risk'),
             const SizedBox(height: 16),
-            const Text('MVP: หน้านี้ยังไม่ดึงประวัติผลประเมิน (จะทำต่อเป็น timeline ได้)'),
+            const Text(
+              'MVP: หน้านี้ยังไม่ดึงประวัติผลประเมิน (จะทำต่อเป็น timeline ได้)',
+            ),
           ],
         ),
       ),

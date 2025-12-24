@@ -27,13 +27,19 @@ class AppUser {
   final String name;
   final UserRole role;
   final bool consentCamera;
+
+  final bool hasCompletedPhq9;
+  final bool hasCompletedDeepAssessment;
+
   final String? lastRiskLevel;
 
-  AppUser({
+  const AppUser({
     required this.uid,
     required this.name,
     required this.role,
     required this.consentCamera,
+    required this.hasCompletedPhq9,
+    required this.hasCompletedDeepAssessment,
     this.lastRiskLevel,
   });
 
@@ -43,14 +49,10 @@ class AppUser {
       name: (data['name'] ?? '') as String,
       role: roleFromString((data['role'] ?? 'patient') as String),
       consentCamera: (data['consentCamera'] ?? false) as bool,
+      hasCompletedPhq9: (data['hasCompletedPhq9'] ?? false) as bool,
+      hasCompletedDeepAssessment:
+          (data['hasCompletedDeepAssessment'] ?? false) as bool,
       lastRiskLevel: data['lastRiskLevel'] as String?,
     );
   }
-
-  Map<String, dynamic> toMap() => {
-        'name': name,
-        'role': roleToString(role),
-        'consentCamera': consentCamera,
-        'lastRiskLevel': lastRiskLevel,
-      };
 }

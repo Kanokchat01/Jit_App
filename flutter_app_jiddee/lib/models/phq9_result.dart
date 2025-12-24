@@ -16,24 +16,33 @@ class Phq9Result {
   });
 
   Map<String, dynamic> toMap() => {
-        'uid': uid,
-        'answers': answers,
-        'scoreTotal': scoreTotal,
-        'severity': severity,
-        'riskLevel': riskLevel,
-        'createdAt': createdAt, // Firestore รองรับ DateTime
-      };
+    'uid': uid,
+    'answers': answers,
+    'scoreTotal': scoreTotal,
+    'severity': severity,
+    'riskLevel': riskLevel,
+    'createdAt': createdAt, // Firestore รองรับ DateTime
+  };
 }
 
 ({String severity, String riskLevel}) classifyPhq9(List<int> a) {
   final total = a.fold<int>(0, (p, c) => p + c);
 
   String severity;
-  if (total <= 4) severity = 'Minimal';
-  else if (total <= 9) severity = 'Mild';
-  else if (total <= 14) severity = 'Moderate';
-  else if (total <= 19) severity = 'Moderately Severe';
-  else severity = 'Severe';
+  if (total <= 4) {
+    severity = 'Minimal';
+    // ignore: curly_braces_in_flow_control_structures
+  } else if (total <= 9)
+    severity = 'Mild';
+  // ignore: curly_braces_in_flow_control_structures
+  else if (total <= 14)
+    severity = 'Moderate';
+  // ignore: curly_braces_in_flow_control_structures
+  else if (total <= 19)
+    severity = 'Moderately Severe';
+  // ignore: curly_braces_in_flow_control_structures
+  else
+    severity = 'Severe';
 
   // MVP risk rules
   String risk;

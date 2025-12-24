@@ -16,7 +16,10 @@ class ResultScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('PHQ-9 Score: ${result.scoreTotal}', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              'PHQ-9 Score: ${result.scoreTotal}',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text('Severity: ${result.severity}'),
             const SizedBox(height: 8),

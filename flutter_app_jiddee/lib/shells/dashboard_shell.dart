@@ -18,10 +18,7 @@ class _DashboardShellState extends State<DashboardShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      DashboardHome(user: widget.user),
-      const PatientListScreen(),
-    ];
+    final pages = [DashboardHome(user: widget.user), const PatientListScreen()];
 
     return Scaffold(
       appBar: AppBar(
@@ -39,7 +36,10 @@ class _DashboardShellState extends State<DashboardShell> {
         currentIndex: index,
         onTap: (i) => setState(() => index = i),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Overview'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Overview',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Patients'),
         ],
       ),
