@@ -20,9 +20,10 @@ class AuthGate extends StatelessWidget {
 
         final user = snap.data;
         if (user == null) return const LoginScreen();
-        return const RoleGate();
+
+        // ✅ ส่ง user ให้ RoleGate
+        return RoleGate(user: user);
       },
     );
   }
 }
-//jfhf

@@ -6,10 +6,8 @@ import 'gates/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  runApp(const MyApp());
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -20,10 +18,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'JidDee',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-      ),
-      home: const AuthGate(),
+      theme: ThemeData(useMaterial3: true),
+      home: AuthGate(), // ← ไม่มี const
     );
   }
 }

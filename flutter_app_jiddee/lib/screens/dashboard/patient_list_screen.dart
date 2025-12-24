@@ -28,7 +28,9 @@ class _PatientListScreenState extends State<PatientListScreen> {
               }
               var patients = snap.data!;
               if (filter != 'all') {
-                patients = patients.where((p) => (p.lastRiskLevel ?? '') == filter).toList();
+                patients = patients
+                    .where((p) => (p.lastRiskLevel ?? '') == filter)
+                    .toList();
               }
 
               if (patients.isEmpty) {
@@ -42,13 +44,19 @@ class _PatientListScreenState extends State<PatientListScreen> {
                   final p = patients[i];
                   final risk = (p.lastRiskLevel ?? '-').toUpperCase();
                   return ListTile(
-                    leading: CircleAvatar(child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase())),
+                    leading: CircleAvatar(
+                      child: Text(
+                        p.name.isEmpty ? '?' : p.name[0].toUpperCase(),
+                      ),
+                    ),
                     title: Text(p.name),
                     subtitle: Text('Risk: $risk'),
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => PatientDetailScreen(patient: p)),
+                        MaterialPageRoute(
+                          builder: (_) => PatientDetailScreen(patient: p),
+                        ),
                       );
                     },
                   );
