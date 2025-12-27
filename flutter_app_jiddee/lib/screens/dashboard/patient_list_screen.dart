@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/firestore_service.dart';
 import '../../models/app_user.dart';
+import '../../models/risk_level.dart';
 import 'patient_detail_screen.dart';
 
 class PatientListScreen extends StatefulWidget {
@@ -12,7 +13,8 @@ class PatientListScreen extends StatefulWidget {
 }
 
 class _PatientListScreenState extends State<PatientListScreen> {
-  String filter = 'all'; // all/green/yellow/red
+  /// all | green | yellow | red
+  String filter = 'all';
 
   @override
   Widget build(BuildContext context) {
@@ -26,11 +28,17 @@ class _PatientListScreenState extends State<PatientListScreen> {
               if (!snap.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
+
               var patients = snap.data!;
+
+              // =========================
+              // Filter by PHQ-9 risk
+              // =========================
               if (filter != 'all') {
-                patients = patients
-                    .where((p) => (p.lastRiskLevel ?? '') == filter)
-                    .toList();
+                patients = patients.where((p) {
+                  final risk = riskFromString(p.phq9RiskLevel);
+                  return risk != null && riskToString(risk) == filter;
+                }).toList();
               }
 
               if (patients.isEmpty) {
@@ -42,15 +50,30 @@ class _PatientListScreenState extends State<PatientListScreen> {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final p = patients[i];
-                  final risk = (p.lastRiskLevel ?? '-').toUpperCase();
+                  final risk = riskFromString(p.phq9RiskLevel);
+
                   return ListTile(
                     leading: CircleAvatar(
+                      backgroundColor:
+                          risk?.color.withOpacity(0.15) ?? Colors.grey.shade300,
                       child: Text(
                         p.name.isEmpty ? '?' : p.name[0].toUpperCase(),
+                        style: TextStyle(
+                          color: risk?.color ?? Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     title: Text(p.name),
-                    subtitle: Text('Risk: $risk'),
+                    subtitle: Text(
+                      risk != null
+                          ? 'PHQ-9: ${risk.label}'
+                          : 'PHQ-9: ยังไม่ได้ทำ',
+                      style: TextStyle(color: risk?.color),
+                    ),
+                    trailing: risk != null
+                        ? Icon(risk.icon, color: risk.color)
+                        : const Icon(Icons.warning, color: Colors.orange),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -82,11 +105,8 @@ class _PatientListScreenState extends State<PatientListScreen> {
       padding: const EdgeInsets.all(12),
       child: Wrap(
         spacing: 8,
-        children: [
-          chip('all', 'All'),
-          chip('red', 'Red'),
-          chip('yellow', 'Yellow'),
-          chip('green', 'Green'),
+        children: const [
+          // labels คงเดิม แต่ filter จะ map ไป phq9RiskLevel
         ],
       ),
     );

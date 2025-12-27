@@ -5,18 +5,17 @@ import '../../models/app_user.dart';
 import '../../models/phq9_result.dart';
 import '../../services/firestore_service.dart';
 
-import '../deep_assessment/deep_assessment_screen.dart';
-
 class Phq9Screen extends StatefulWidget {
   final AppUser user;
-  const Phq9Screen({super.key, required this.user});
+  final bool fromHome;
+
+  const Phq9Screen({super.key, required this.user, this.fromHome = false});
 
   @override
   State<Phq9Screen> createState() => _Phq9ScreenState();
 }
 
 class _Phq9ScreenState extends State<Phq9Screen> {
-  /// คำถาม PHQ-9
   final questions = const [
     '1) ในช่วง 2 สัปดาห์ที่ผ่านมา คุณรู้สึกไม่สนใจหรือไม่เพลิดเพลินกับการทำสิ่งต่าง ๆ หรือไม่',
     '2) ในช่วง 2 สัปดาห์ที่ผ่านมา คุณรู้สึกหดหู่ เศร้า หรือสิ้นหวังหรือไม่',
@@ -36,9 +35,7 @@ class _Phq9ScreenState extends State<Phq9Screen> {
     (3, 'เป็นเกือบทุกวัน'),
   ];
 
-  /// ใช้ int? เพื่อให้ยังไม่เลือก → ไม่มีจุดสี
   final List<int?> answers = List<int?>.filled(9, null);
-
   bool saving = false;
 
   @override
@@ -50,12 +47,19 @@ class _Phq9ScreenState extends State<Phq9Screen> {
       appBar: AppBar(
         title: const Text('แบบประเมิน PHQ-9'),
         backgroundColor: primaryColor,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
+        ],
       ),
       backgroundColor: Colors.blue.shade50,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          /// คะแนนรวม
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -73,7 +77,6 @@ class _Phq9ScreenState extends State<Phq9Screen> {
           ),
           const SizedBox(height: 16),
 
-          /// คำถาม
           for (int i = 0; i < questions.length; i++) ...[
             Card(
               margin: const EdgeInsets.only(bottom: 16),
@@ -106,7 +109,6 @@ class _Phq9ScreenState extends State<Phq9Screen> {
             ),
           ],
 
-          /// ปุ่มส่ง
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -122,22 +124,17 @@ class _Phq9ScreenState extends State<Phq9Screen> {
     );
   }
 
-  /// =========================
-  /// Submit PHQ-9
-  /// =========================
   Future<void> _submit() async {
     setState(() => saving = true);
 
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
       final safeAnswers = answers.map((e) => e ?? 0).toList();
-      final total = safeAnswers.fold<int>(0, (p, c) => p + c);
       final cls = classifyPhq9(safeAnswers);
 
       final result = Phq9Result(
-        uid: uid,
+        uid: widget.user.uid,
         answers: safeAnswers,
-        scoreTotal: total,
+        scoreTotal: safeAnswers.fold(0, (a, b) => a + b),
         severity: cls.severity,
         riskLevel: cls.riskLevel,
         createdAt: DateTime.now(),
@@ -146,48 +143,52 @@ class _Phq9ScreenState extends State<Phq9Screen> {
       await FirestoreService().savePhq9Result(result);
 
       if (!mounted) return;
-
       _showResultDialog(cls.riskLevel);
     } finally {
       if (mounted) setState(() => saving = false);
     }
   }
 
-  /// =========================
-  /// Dialog แสดงผลหลังส่ง
-  /// =========================
   void _showResultDialog(String risk) {
-    final bool isGreen = risk == 'green';
+    String message;
+
+    switch (risk) {
+      case 'green':
+        message = 'สถานะ/อาการของคุณอยู่ในระดับสีเขียว\nปลอดภัย';
+        break;
+
+      case 'yellow':
+        message =
+            'สถานะ/อาการของคุณอยู่ในระดับสีเหลือง\nระบบจะพาไปขั้นตอนถัดไป';
+        break;
+
+      case 'red':
+        message = 'สถานะ/อาการของคุณอยู่ในระดับสีแดง\nระบบจะพาไปขั้นตอนถัดไป';
+        break;
+
+      default:
+        message = 'ไม่สามารถประเมินผลได้';
+    }
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: Text(isGreen ? 'ผลการประเมิน' : 'ต้องทำแบบประเมินเพิ่มเติม'),
-        content: Text(
-          isGreen
-              ? 'สถานะ/อาการของคุณอยู่ในระดับสีเขียว\n'
-                    'ปลอดภัย หายห่วง'
-              : 'สถานะ/อาการของคุณอยู่ในระดับสี${risk == 'yellow' ? 'เหลือง' : 'แดง'}\n'
-                    'คุณจำเป็นต้องทำแบบประเมินเชิงลึกต่อ',
-        ),
+        title: const Text('ผลการประเมิน'),
+        content: Text(message),
         actions: [
           ElevatedButton(
             child: const Text('ตกลง'),
-            onPressed: () {
-              Navigator.of(context).pop();
+            onPressed: () async {
+              Navigator.pop(context);
 
-              if (isGreen) {
-                /// กลับ Home (ให้ RoleGate จัดการ)
+              await FirestoreService().updatePhq9Status(
+                uid: widget.user.uid,
+                riskLevel: risk,
+              );
+
+              if (widget.fromHome) {
                 Navigator.popUntil(context, (route) => route.isFirst);
-              } else {
-                /// ไปแบบสอบถามเชิงลึก
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DeepAssessmentScreen(user: widget.user),
-                  ),
-                );
               }
             },
           ),

@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/app_user.dart';
+import '../patient/appointment_screen.dart';
 
-/// =========================
-/// หน้าแบบสอบถามเชิงลึก
-/// =========================
 class DeepAssessmentScreen extends StatefulWidget {
   final AppUser user;
   const DeepAssessmentScreen({super.key, required this.user});
@@ -15,7 +13,6 @@ class DeepAssessmentScreen extends StatefulWidget {
 }
 
 class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
-  /// คำถามเชิงลึก
   final questions = const [
     '1) คุณรู้สึกสิ้นหวังหรือมองไม่เห็นทางออกของปัญหาหรือไม่',
     '2) คุณรู้สึกว่าความเครียดรบกวนชีวิตประจำวันอย่างมากหรือไม่',
@@ -24,7 +21,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     '5) คุณรู้สึกว่าควบคุมอารมณ์ของตัวเองไม่ได้หรือไม่',
   ];
 
-  /// ตัวเลือกคำตอบ (0–3)
   final options = const [
     (0, 'ไม่เลย'),
     (1, 'เล็กน้อย'),
@@ -32,9 +28,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     (3, 'มากที่สุด'),
   ];
 
-  /// คำตอบ (ยังไม่เลือก = null)
   final List<int?> answers = List<int?>.filled(5, null);
-
   bool saving = false;
 
   @override
@@ -49,7 +43,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          /// คะแนนรวม
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -63,7 +56,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
           ),
           const SizedBox(height: 16),
 
-          /// คำถาม
           for (int i = 0; i < questions.length; i++) ...[
             Card(
               margin: const EdgeInsets.only(bottom: 16),
@@ -95,7 +87,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
             ),
           ],
 
-          /// ปุ่มส่ง
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -111,109 +102,69 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     );
   }
 
-  /// =========================
-  /// เมื่อกดส่งแบบสอบถาม
-  /// =========================
-  Future<void> _submit() async {
-    setState(() => saving = true);
+  void _submit() {
+    final safeAnswers = answers.map((e) => e ?? 0).toList();
+    final total = safeAnswers.fold<int>(0, (p, c) => p + c);
 
-    try {
-      final safeAnswers = answers.map((e) => e ?? 0).toList();
-      final total = safeAnswers.fold<int>(0, (p, c) => p + c);
-
-      /// ตัดสินผล
-      /// 0–3 = green | 4–7 = yellow | ≥8 = red
-      String deepRisk;
-      if (total <= 3) {
-        deepRisk = 'green';
-      } else if (total <= 7) {
-        deepRisk = 'yellow';
-      } else {
-        deepRisk = 'red';
-      }
-
-      if (!mounted) return;
-
-      if (deepRisk == 'green') {
-        await _saveResult(deepRisk, total);
-        _goBackToGate();
-      } else if (deepRisk == 'yellow') {
-        _showComeBackLaterDialog(deepRisk, total);
-      } else {
-        _showAppointmentDialog(deepRisk, total);
-      }
-    } finally {
-      if (mounted) setState(() => saving = false);
+    String deepRisk;
+    if (total <= 3) {
+      deepRisk = 'green';
+    } else if (total <= 7) {
+      deepRisk = 'yellow';
+    } else {
+      deepRisk = 'red';
     }
+
+    _showResultDialog(deepRisk, total);
   }
 
-  /// =========================
-  /// บันทึกผลลง Firestore
-  /// =========================
+  void _showResultDialog(String risk, int total) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('ผลการประเมิน'),
+        content: Text(
+          risk == 'green'
+              ? 'ผลการประเมินอยู่ในระดับปลอดภัย (สีเขียว)'
+              : risk == 'yellow'
+              ? 'ผลการประเมินอยู่ในระดับควรติดตาม (สีเหลือง)\nกรุณากลับมาทำแบบประเมินอีกครั้ง'
+              : 'ผลการประเมินอยู่ในระดับความเสี่ยงสูง (สีแดง)\nแนะนำให้เข้ารับการปรึกษาแพทย์',
+        ),
+        actions: [
+          ElevatedButton(
+            child: const Text('ตกลง'),
+            onPressed: () async {
+              Navigator.pop(context);
+
+              if (risk == 'red') {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AppointmentScreen(user: widget.user),
+                  ),
+                );
+              }
+
+              await _saveResult(risk, total);
+
+              Navigator.popUntil(context, (route) => route.isFirst);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveResult(String risk, int total) async {
     await FirebaseFirestore.instance
         .collection('users')
         .doc(widget.user.uid)
         .update({
           'hasCompletedDeepAssessment': true,
-          'lastRiskLevel': risk,
+          'deepRiskLevel': risk,
           'deepAssessmentScore': total,
           'deepAssessmentAt': FieldValue.serverTimestamp(),
         });
-  }
-
-  /// 🟡 เหลือง → แจ้งให้กลับมาทำใหม่
-  void _showComeBackLaterDialog(String risk, int total) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('คำแนะนำ'),
-        content: const Text(
-          'ผลการประเมินของคุณอยู่ในระดับที่ควรติดตาม\n'
-          'กรุณากลับมาทำแบบประเมินอีกครั้งในภายหลัง',
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _saveResult(risk, total);
-              _goBackToGate();
-            },
-            child: const Text('ตกลง'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 🔴 แดง → แนะนำให้นัดแพทย์
-  void _showAppointmentDialog(String risk, int total) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('ควรพบแพทย์'),
-        content: const Text(
-          'ผลการประเมินพบว่าคุณมีความเสี่ยงสูง\n'
-          'แนะนำให้เข้ารับการปรึกษาจากแพทย์หรือผู้เชี่ยวชาญ',
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _saveResult(risk, total);
-              _goBackToGate();
-            },
-            child: const Text('นัดแพทย์'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ✅ กลับไป AuthGate / RoleGate
-  void _goBackToGate() {
-    Navigator.popUntil(context, (route) => route.isFirst);
   }
 }

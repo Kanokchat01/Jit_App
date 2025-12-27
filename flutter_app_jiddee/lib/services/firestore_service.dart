@@ -16,30 +16,30 @@ class FirestoreService {
     });
   }
 
-  /// สร้าง user doc เฉพาะครั้งแรกเท่านั้น
-  /// ❗ สำคัญ: ห้าม overwrite role ของ admin/clinician
+  /// สร้าง user doc เฉพาะครั้งแรก
   Future<void> ensureUserDoc({
     required String uid,
     required String name,
     String role = 'patient',
   }) async {
     final ref = _db.collection('users').doc(uid);
-
     final snap = await ref.get();
-    if (snap.exists) {
-      // มี user อยู่แล้ว → ไม่แก้อะไร
-      return;
-    }
+
+    if (snap.exists) return;
 
     await ref.set({
       'name': name,
-      'role': role, // patient (default)
+      'role': role,
       'consentCamera': false,
 
-      // ⭐ สำคัญ: ผู้ใช้ใหม่ต้องทำ PHQ-9
+      // PHQ-9
       'hasCompletedPhq9': false,
+      'phq9RiskLevel': null,
 
-      'lastRiskLevel': null,
+      // Deep Assessment
+      'hasCompletedDeepAssessment': false,
+      'deepRiskLevel': null,
+
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -48,15 +48,27 @@ class FirestoreService {
   // PHQ-9
   // =========================
 
+  /// เก็บผล PHQ-9 (history)
   Future<void> savePhq9Result(Phq9Result r) async {
-    // เก็บผลแบบสอบถาม
     await _db.collection('phq9_results').add(r.toMap());
+  }
 
-    // ⭐ อัปเดตสถานะผู้ใช้
-    await _db.collection('users').doc(r.uid).set({
-      'hasCompletedPhq9': true, // ทำ PHQ-9 แล้ว
-      'lastRiskLevel': r.riskLevel,
-      'lastAssessmentAt': FieldValue.serverTimestamp(),
+  /// อัปเดตสถานะผู้ใช้หลังทำ PHQ-9
+  Future<void> updatePhq9Status({
+    required String uid,
+    required String riskLevel,
+  }) async {
+    await _db.collection('users').doc(uid).set({
+      // PHQ-9
+      'hasCompletedPhq9': true,
+      'phq9RiskLevel': riskLevel,
+
+      // ⭐ สำคัญ: ทุกครั้งที่ทำ PHQ-9 ใหม่
+      // ต้องบังคับให้ Deep Assessment เริ่มใหม่
+      'hasCompletedDeepAssessment': false,
+      'deepRiskLevel': null,
+
+      'lastPhq9At': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
@@ -70,10 +82,8 @@ class FirestoreService {
           .map((d) => AppUser.fromMap(d.id, d.data()))
           .toList();
 
-      // เอาเฉพาะ patient
       final patients = users.where((u) => u.role == UserRole.patient).toList();
 
-      // sort: red > yellow > green > null
       int rank(String? r) {
         switch (r) {
           case 'red':
@@ -87,10 +97,31 @@ class FirestoreService {
         }
       }
 
+      // ✅ เรียงตามความเสี่ยงจาก PHQ-9 เท่านั้น
       patients.sort(
-        (a, b) => rank(a.lastRiskLevel).compareTo(rank(b.lastRiskLevel)),
+        (a, b) => rank(a.phq9RiskLevel).compareTo(rank(b.phq9RiskLevel)),
       );
+
       return patients;
+    });
+  }
+
+  // =========================
+  // APPOINTMENT
+  // =========================
+
+  Future<void> createAppointment({
+    required AppUser user,
+    required DateTime appointmentAt,
+    String? note,
+  }) async {
+    await _db.collection('appointments').add({
+      'patientUid': user.uid,
+      'patientName': user.name,
+      'appointmentAt': appointmentAt,
+      'note': note,
+      'status': 'pending', // pending | confirmed | completed | canceled
+      'createdAt': FieldValue.serverTimestamp(),
     });
   }
 }

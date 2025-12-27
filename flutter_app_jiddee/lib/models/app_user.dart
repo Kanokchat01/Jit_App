@@ -28,10 +28,17 @@ class AppUser {
   final UserRole role;
   final bool consentCamera;
 
+  // =========================
+  // PHQ-9
+  // =========================
   final bool hasCompletedPhq9;
-  final bool hasCompletedDeepAssessment;
+  final String? phq9RiskLevel;
 
-  final String? lastRiskLevel;
+  // =========================
+  // Deep Assessment
+  // =========================
+  final bool hasCompletedDeepAssessment;
+  final String? deepRiskLevel;
 
   const AppUser({
     required this.uid,
@@ -40,7 +47,8 @@ class AppUser {
     required this.consentCamera,
     required this.hasCompletedPhq9,
     required this.hasCompletedDeepAssessment,
-    this.lastRiskLevel,
+    this.phq9RiskLevel,
+    this.deepRiskLevel,
   });
 
   factory AppUser.fromMap(String uid, Map<String, dynamic> data) {
@@ -49,10 +57,15 @@ class AppUser {
       name: (data['name'] ?? '') as String,
       role: roleFromString((data['role'] ?? 'patient') as String),
       consentCamera: (data['consentCamera'] ?? false) as bool,
+
+      // PHQ-9
       hasCompletedPhq9: (data['hasCompletedPhq9'] ?? false) as bool,
+      phq9RiskLevel: data['phq9RiskLevel'] as String?,
+
+      // Deep Assessment
       hasCompletedDeepAssessment:
           (data['hasCompletedDeepAssessment'] ?? false) as bool,
-      lastRiskLevel: data['lastRiskLevel'] as String?,
+      deepRiskLevel: data['deepRiskLevel'] as String?,
     );
   }
 }

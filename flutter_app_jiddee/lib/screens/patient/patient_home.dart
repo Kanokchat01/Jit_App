@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../models/app_user.dart';
+import '../../models/risk_level.dart';
 
 class DashboardHome extends StatelessWidget {
   final AppUser user;
@@ -9,16 +11,17 @@ class DashboardHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    /// -------------------------
-    /// สถานะ PHQ-9
-    /// -------------------------
-    final bool hasPhq9 = user.lastRiskLevel != null;
+    /// =========================
+    /// PHQ-9
+    /// =========================
+    final bool hasPhq9 = user.hasCompletedPhq9;
+    final RiskLevel? phq9Risk = riskFromString(user.phq9RiskLevel);
 
-    /// -------------------------
-    /// สถานะแบบสอบถามเชิงลึก
-    /// -------------------------
+    /// =========================
+    /// Deep Assessment
+    /// =========================
     final bool needDeepAssessment =
-        user.lastRiskLevel != null && user.lastRiskLevel != 'green';
+        phq9Risk != null && phq9Risk != RiskLevel.green;
 
     final bool hasDeepAssessment =
         needDeepAssessment && user.hasCompletedDeepAssessment;
@@ -50,8 +53,8 @@ class DashboardHome extends StatelessWidget {
                 style: TextStyle(fontSize: 16),
               ),
               onPressed: () {
-                // ❗ ไม่ต้อง push หน้า
-                // RoleGate จะพาไป PHQ-9 เอง
+                // ไม่ต้อง push เอง
+                // RoleGate จะเป็นตัวควบคุม flow
               },
             ),
           ),
@@ -70,13 +73,15 @@ class DashboardHome extends StatelessWidget {
               leading: const Icon(Icons.assignment),
               title: const Text('PHQ-9'),
               subtitle: Text(
-                hasPhq9
-                    ? 'ทำแล้ว (ระดับความเสี่ยง: ${user.lastRiskLevel})'
+                hasPhq9 && phq9Risk != null
+                    ? 'ทำแล้ว (${phq9Risk.label})'
                     : 'ยังไม่ได้ทำแบบประเมิน',
               ),
               trailing: Icon(
-                hasPhq9 ? Icons.check_circle : Icons.warning,
-                color: hasPhq9 ? Colors.green : Colors.orange,
+                hasPhq9 && phq9Risk != null ? phq9Risk.icon : Icons.warning,
+                color: hasPhq9 && phq9Risk != null
+                    ? phq9Risk.color
+                    : Colors.orange,
               ),
             ),
           ),
@@ -84,16 +89,7 @@ class DashboardHome extends StatelessWidget {
           /// -------- Deep Assessment --------
           Card(
             child: ListTile(
-              leading: const Icon(Icons.assignment_turned_in),
-              title: const Text('แบบสอบถามเชิงลึก'),
-              subtitle: Text(
-                !needDeepAssessment
-                    ? 'ไม่จำเป็นต้องทำ'
-                    : hasDeepAssessment
-                    ? 'ทำแบบสอบถามเชิงลึกแล้ว'
-                    : 'ยังไม่ได้ทำแบบสอบถามนี้',
-              ),
-              trailing: Icon(
+              leading: Icon(
                 !needDeepAssessment
                     ? Icons.remove_circle_outline
                     : hasDeepAssessment
@@ -104,6 +100,14 @@ class DashboardHome extends StatelessWidget {
                     : hasDeepAssessment
                     ? Colors.green
                     : Colors.orange,
+              ),
+              title: const Text('แบบสอบถามเชิงลึก'),
+              subtitle: Text(
+                !needDeepAssessment
+                    ? 'ไม่จำเป็นต้องทำ (PHQ-9 อยู่ในระดับสีเขียว)'
+                    : hasDeepAssessment
+                    ? 'ทำแบบสอบถามเชิงลึกแล้ว'
+                    : 'ยังไม่ได้ทำแบบสอบถามนี้',
               ),
             ),
           ),
@@ -117,7 +121,9 @@ class DashboardHome extends StatelessWidget {
             child: ListTile(
               leading: Icon(Icons.info),
               title: Text('Overview'),
-              subtitle: Text('MVP: ไปที่แท็บ Patients เพื่อดูรายชื่อผู้ป่วย'),
+              subtitle: Text(
+                'ข้อมูลนี้ใช้เพื่อช่วยประเมินและติดตามสุขภาพจิตของคุณ',
+              ),
             ),
           ),
         ],

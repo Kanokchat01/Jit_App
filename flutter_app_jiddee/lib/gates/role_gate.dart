@@ -57,20 +57,25 @@ class RoleGate extends StatelessWidget {
         }
 
         // =========================
-        // PATIENT FLOW
+        // PATIENT FLOW (STRICT ORDER)
         // =========================
-        // 1) ยังไม่ทำ PHQ-9
+
+        final String? phq9Risk = userData.phq9RiskLevel;
+
+        // 1) ยังไม่ทำ PHQ-9 → บังคับทำก่อนเสมอ
         if (!userData.hasCompletedPhq9) {
           return Phq9Screen(user: userData);
         }
 
-        // 2) ทำ PHQ-9 แล้ว แต่เหลือง/แดง และยังไม่ทำเชิงลึก
-        if (userData.lastRiskLevel != 'green' &&
+        // 2) ทำ PHQ-9 แล้ว และผลไม่ใช่เขียว
+        //    → ต้องทำ Deep Assessment (ถ้ายังไม่ทำ)
+        if (phq9Risk != null &&
+            phq9Risk != 'green' &&
             !userData.hasCompletedDeepAssessment) {
           return DeepAssessmentScreen(user: userData);
         }
 
-        // 3) ทุกกรณีอื่น → Home
+        // 3) ผ่านทุกขั้น → เข้า Home
         return PatientShell(user: userData);
       },
     );

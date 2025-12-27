@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../models/app_user.dart';
+import '../../models/risk_level.dart';
 import '../patient/phq9_screen.dart';
 
 class DashboardHome extends StatelessWidget {
@@ -10,50 +12,41 @@ class DashboardHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    /// -------------------------
-    /// สถานะ PHQ-9
-    /// -------------------------
-    final bool hasPhq9 = user.lastRiskLevel != null;
+    /// =========================
+    /// PHQ-9
+    /// =========================
+    final bool hasPhq9 = user.hasCompletedPhq9;
+    final RiskLevel? phq9Risk = riskFromString(user.phq9RiskLevel);
 
-    /// -------------------------
-    /// สถานะแบบสอบถามเชิงลึก
-    /// -------------------------
+    /// =========================
+    /// Deep Assessment
+    /// =========================
     final bool needDeepAssessment =
-        user.lastRiskLevel != null && user.lastRiskLevel != 'green';
+        phq9Risk != null && phq9Risk != RiskLevel.green;
 
     final bool hasDeepAssessment =
         needDeepAssessment && user.hasCompletedDeepAssessment;
 
-    /// ข้อความ + สี ของผลเชิงลึก
-    String deepText;
-    Color deepColor;
-    IconData deepIcon;
+    /// =========================
+    /// Deep Assessment UI
+    /// =========================
+    late final String deepText;
+    late final Color deepColor;
+    late final IconData deepIcon;
 
     if (!needDeepAssessment) {
-      deepText = 'ไม่จำเป็นต้องทำ (PHQ-9 เป็นสีเขียว)';
+      deepText = 'ไม่จำเป็นต้องทำ (PHQ-9 อยู่ในระดับสีเขียว)';
       deepColor = Colors.grey;
       deepIcon = Icons.remove_circle_outline;
     } else if (!hasDeepAssessment) {
-      deepText = 'ยังไม่ได้ทำแบบสอบถามนี้';
+      deepText = 'ยังไม่ได้ทำแบบสอบถามเชิงลึก';
       deepColor = Colors.orange;
       deepIcon = Icons.warning;
     } else {
-      switch (user.lastRiskLevel) {
-        case 'green':
-          deepText = 'ผลเชิงลึก: ความเสี่ยงต่ำ (เขียว)';
-          deepColor = Colors.green;
-          deepIcon = Icons.check_circle;
-          break;
-        case 'yellow':
-          deepText = 'ผลเชิงลึก: ควรติดตาม (เหลือง)';
-          deepColor = Colors.orange;
-          deepIcon = Icons.warning;
-          break;
-        default:
-          deepText = 'ผลเชิงลึก: ความเสี่ยงสูง (แดง)';
-          deepColor = Colors.red;
-          deepIcon = Icons.error;
-      }
+      final deepRisk = riskFromString(user.deepRiskLevel)!;
+      deepText = 'ผลเชิงลึก: ${deepRisk.label}';
+      deepColor = deepRisk.color;
+      deepIcon = deepRisk.icon;
     }
 
     return SingleChildScrollView(
@@ -71,7 +64,7 @@ class DashboardHome extends StatelessWidget {
           const SizedBox(height: 24),
 
           /// =========================
-          /// ปุ่มหลัก: ทำ PHQ-9 (เริ่มใหม่แบบ clean)
+          /// ปุ่มหลัก: ทำ PHQ-9
           /// =========================
           SizedBox(
             width: double.infinity,
@@ -83,13 +76,11 @@ class DashboardHome extends StatelessWidget {
                 style: TextStyle(fontSize: 16),
               ),
               onPressed: () {
-                // 🔥 เคลียร์ stack ก่อน
-                Navigator.popUntil(context, (route) => route.isFirst);
-
-                // 🔥 เริ่มทำ PHQ-9 ใหม่
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => Phq9Screen(user: user)),
+                  MaterialPageRoute(
+                    builder: (_) => Phq9Screen(user: user, fromHome: true),
+                  ),
                 );
               },
             ),
@@ -109,13 +100,15 @@ class DashboardHome extends StatelessWidget {
               leading: const Icon(Icons.assignment),
               title: const Text('PHQ-9'),
               subtitle: Text(
-                hasPhq9
-                    ? 'ทำแล้ว (ระดับความเสี่ยง: ${user.lastRiskLevel})'
+                hasPhq9 && phq9Risk != null
+                    ? 'ทำแล้ว (${phq9Risk.label})'
                     : 'ยังไม่ได้ทำแบบประเมิน',
               ),
               trailing: Icon(
-                hasPhq9 ? Icons.check_circle : Icons.warning,
-                color: hasPhq9 ? Colors.green : Colors.orange,
+                hasPhq9 && phq9Risk != null ? phq9Risk.icon : Icons.warning,
+                color: hasPhq9 && phq9Risk != null
+                    ? phq9Risk.color
+                    : Colors.orange,
               ),
             ),
           ),
