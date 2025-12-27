@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/app_user.dart';
+import 'admin_user_list_screen.dart';
 
 class AdminHome extends StatelessWidget {
   final AppUser user;
@@ -52,7 +53,12 @@ class AdminHome extends StatelessWidget {
                     icon: Icons.people,
                     title: 'ผู้ป่วยทั้งหมด',
                     onTap: () {
-                      // TODO: ไปหน้า list ผู้ป่วย
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminUserListScreen(),
+                        ),
+                      );
                     },
                   ),
                   _DashboardCard(
