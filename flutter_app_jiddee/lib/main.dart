@@ -9,6 +9,12 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  try {
+    await Firebase.initializeApp();
+    print('🔥 Firebase connected successfully!'); // เพิ่มบรรทัดนี้
+  } catch (e) {
+    print('❌ Firebase error: $e'); // เพิ่มบรรทัดนี้
+  }
   runApp(const MyApp());
 }
 
