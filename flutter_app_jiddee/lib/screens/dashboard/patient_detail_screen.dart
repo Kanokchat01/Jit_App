@@ -1,82 +1,167 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/app_user.dart';
 import '../../models/risk_level.dart';
+import '../../services/firestore_service.dart';
 
 class PatientDetailScreen extends StatelessWidget {
-  final AppUser patient;
-  const PatientDetailScreen({super.key, required this.patient});
+  final AppUser user;
+
+  const PatientDetailScreen({
+    super.key,
+    required this.user,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final RiskLevel? phq9Risk = riskFromString(patient.phq9RiskLevel);
-    final RiskLevel? deepRisk = riskFromString(patient.deepRiskLevel);
+    final fs = FirestoreService();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Patient Detail')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// =========================
-            /// Basic Info
-            /// =========================
-            Text(
-              patient.name,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text('UID: ${patient.uid}'),
+      appBar: AppBar(
+        title: const Text('รายละเอียดผู้ป่วย'),
+      ),
+      body: StreamBuilder<AppUser>(
+        stream: fs.watchUser(user.uid),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            const SizedBox(height: 16),
+          if (snap.hasError || !snap.hasData) {
+            return const Center(
+              child: Text('ไม่สามารถโหลดข้อมูลผู้ป่วยได้'),
+            );
+          }
 
-            /// =========================
-            /// PHQ-9
-            /// =========================
-            Row(
-              children: [
-                const Text(
-                  'PHQ-9: ',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (phq9Risk != null) ...[
-                  Icon(phq9Risk.icon, color: phq9Risk.color),
-                  const SizedBox(width: 6),
-                  Text(phq9Risk.label, style: TextStyle(color: phq9Risk.color)),
-                ] else
-                  const Text('ยังไม่ได้ทำ'),
-              ],
-            ),
+          final u = snap.data!;
+          final phqRisk = riskFromString(u.phq9RiskLevel);
+          final deepRisk = riskFromString(u.deepRiskLevel);
 
-            const SizedBox(height: 8),
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _sectionTitle('ข้อมูลพื้นฐาน'),
+              _infoTile('ชื่อ', u.name),
+              _infoTile('บทบาท', u.role.name),
+              if (u.phone != null) _infoTile('เบอร์โทร', u.phone!),
+              if (u.age != null) _infoTile('อายุ', u.age!),
+              if (u.gender != null) _infoTile('เพศ', u.gender!),
 
-            /// =========================
-            /// Deep Assessment
-            /// =========================
-            Row(
-              children: [
-                const Text(
-                  'Deep Assessment: ',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (deepRisk != null) ...[
-                  Icon(deepRisk.icon, color: deepRisk.color),
-                  const SizedBox(width: 6),
-                  Text(deepRisk.label, style: TextStyle(color: deepRisk.color)),
-                ] else
-                  const Text('ยังไม่ได้ทำ'),
-              ],
-            ),
+              const SizedBox(height: 16),
+              _sectionTitle('ผลการประเมิน'),
 
-            const SizedBox(height: 24),
+              _riskTile(
+                title: 'PHQ-9',
+                completed: u.hasCompletedPhq9,
+                risk: phqRisk,
+              ),
 
-            const Text(
-              'MVP: หน้านี้ยังไม่ดึงประวัติผลประเมิน\n'
-              'สามารถต่อยอดเป็น timeline หรือ chart ได้',
-            ),
-          ],
+              _riskTile(
+                title: 'แบบสอบถามเชิงลึก (TMHI-55)',
+                completed: u.hasCompletedDeepAssessment,
+                risk: deepRisk,
+                score: u.deepScore,
+              ),
+
+              const SizedBox(height: 16),
+              _sectionTitle('การนัดหมาย'),
+
+              StreamBuilder<Map<String, dynamic>?>(
+                stream: fs.watchLatestAppointment(u.uid),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const ListTile(
+                      title: Text('กำลังโหลดข้อมูลการนัดหมาย...'),
+                    );
+                  }
+
+                  final appt = snap.data;
+                  if (appt == null) {
+                    return const ListTile(
+                      title: Text('ยังไม่มีการนัดหมาย'),
+                    );
+                  }
+
+                  final status = appt['status'] ?? '-';
+                  final apptAt = appt['appointmentAt'];
+                  DateTime? dt;
+
+                  if (apptAt is Timestamp) {
+                    dt = apptAt.toDate();
+                  }
+
+                  final dateText = dt == null
+                      ? '-'
+                      : '${dt.day.toString().padLeft(2, '0')}/'
+                          '${dt.month.toString().padLeft(2, '0')}/'
+                          '${dt.year} '
+                          '${dt.hour.toString().padLeft(2, '0')}:'
+                          '${dt.minute.toString().padLeft(2, '0')}';
+
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.calendar_month),
+                      title: Text('สถานะ: $status'),
+                      subtitle: Text('วันนัด: $dateText'),
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ================= UI helpers =================
+
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+
+  Widget _infoTile(String title, String value) {
+    return ListTile(
+      dense: true,
+      title: Text(title),
+      subtitle: Text(value),
+    );
+  }
+
+  Widget _riskTile({
+    required String title,
+    required bool completed,
+    RiskLevel? risk,
+    int? score,
+  }) {
+    if (!completed) {
+      return ListTile(
+        leading: const Icon(Icons.warning, color: Colors.orange),
+        title: Text(title),
+        subtitle: const Text('ยังไม่ได้ทำ'),
+      );
+    }
+
+    return ListTile(
+      leading: Icon(
+        risk?.icon ?? Icons.info,
+        color: risk?.color ?? Colors.blueGrey,
+      ),
+      title: Text(title),
+      subtitle: Text(
+        risk == null
+            ? 'ไม่มีระดับความเสี่ยง'
+            : '${risk.label}${score != null ? ' • คะแนน $score' : ''}',
       ),
     );
   }

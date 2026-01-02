@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
 import '../models/app_user.dart';
+import '../services/firestore_service.dart';
 import '../screens/dashboard/dashboard_home.dart';
 
 class PatientShell extends StatelessWidget {
@@ -10,22 +9,27 @@ class PatientShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('JidDee'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              // ❗ ไม่ต้อง Navigator.push
-              // AuthGate จะพากลับหน้า Login ให้อัตโนมัติ
-            },
-          ),
-        ],
-      ),
-      body: DashboardHome(user: user),
+    return StreamBuilder<AppUser>(
+      stream: FirestoreService().watchUser(user.uid),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (!snap.hasData) {
+          return const Scaffold(
+            body: Center(child: Text('ไม่พบข้อมูลผู้ใช้')),
+          );
+        }
+
+        final liveUser = snap.data!;
+
+        return Scaffold(
+          body: DashboardHome(user: liveUser),
+        );
+      },
     );
   }
 }
