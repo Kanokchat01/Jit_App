@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/app_user.dart';
-import '../screens/dashboard/dashboard_home.dart';
-import '../screens/dashboard/patient_list_screen.dart';
+import '../gates/auth_gate.dart';
+
+// ✅ import ให้ตรง path จริง
+import '../screens/admin/admin_dashboard_screen.dart';
+import '../screens/admin/admin_appointment_queue_screen.dart';
+import '../addmin/admin_user_list_screen.dart';
 
 class DashboardShell extends StatefulWidget {
   final AppUser user;
@@ -18,29 +22,72 @@ class _DashboardShellState extends State<DashboardShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [DashboardHome(user: widget.user), const PatientListScreen()];
+    // ✅ ใช้ widget ที่มีอยู่จริง
+    final pages = const [
+      AdminDashboardScreen(),
+      AdminUserListScreen(),
+      AdminAppointmentQueueScreen(),
+    ];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Dashboard (${widget.user.role.name})'),
+        title: const Text('Admin • JidDee'),
         actions: [
           IconButton(
-            onPressed: () => FirebaseAuth.instance.signOut(),
+            tooltip: 'ออกจากระบบ',
             icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('ออกจากระบบ'),
+                  content: const Text('คุณต้องการออกจากระบบหรือไม่'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('ยกเลิก'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('ออกจากระบบ'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (ok != true) return;
+
+              await FirebaseAuth.instance.signOut();
+              if (!context.mounted) return;
+
+              // ✅ เคลียร์ stack กลับ AuthGate
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const AuthGate()),
+                (route) => false,
+              );
+            },
           ),
         ],
       ),
+
       body: pages[index],
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index,
         onTap: (i) => setState(() => index = i),
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
-            label: 'Overview',
+            label: 'Dashboard',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Patients'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people),
+            label: 'ผู้ป่วย',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.event_note),
+            label: 'คิวนัด',
+          ),
         ],
       ),
     );

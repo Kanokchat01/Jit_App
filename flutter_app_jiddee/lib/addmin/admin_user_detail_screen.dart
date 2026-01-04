@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../models/app_user.dart';
 
 class AdminUserDetailScreen extends StatelessWidget {
@@ -34,14 +35,13 @@ class AdminUserDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          StreamBuilder<QuerySnapshot>(
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            // ✅ แก้: เอา orderBy ออก เพื่อไม่ต้องใช้ composite index
             stream: FirebaseFirestore.instance
                 .collection('appointments')
                 .where('patientUid', isEqualTo: user.uid)
-                .orderBy('appointmentAt', descending: true)
                 .snapshots(),
             builder: (context, snap) {
-              // 🔴 สำคัญมาก
               if (snap.hasError) {
                 return Text(
                   'เกิดข้อผิดพลาด: ${snap.error}',
@@ -53,26 +53,55 @@ class AdminUserDetailScreen extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (!snap.hasData || snap.data!.docs.isEmpty) {
+              final docs = snap.data?.docs ?? [];
+              if (docs.isEmpty) {
                 return const Text('ยังไม่มีการนัดแพทย์');
               }
 
-              final docs = snap.data!.docs;
+              // ✅ sort เองในฝั่ง client (ล่าสุดก่อน)
+              final items = docs.map((d) => {'id': d.id, ...d.data()}).toList();
+              items.sort((a, b) {
+                final ad = _sortDate(a);
+                final bd = _sortDate(b);
+                return bd.compareTo(ad);
+              });
 
               return Column(
-                children: docs.map((d) {
-                  final data = d.data() as Map<String, dynamic>;
-                  final ts = data['appointmentAt'] as Timestamp;
-                  final dt = ts.toDate();
+                children: items.map((data) {
+                  final status = (data['status'] ?? '-').toString();
+
+                  DateTime? dt;
+                  final apptAt = data['appointmentAt'];
+                  if (apptAt is Timestamp) dt = apptAt.toDate();
+                  if (apptAt is DateTime) dt = apptAt;
+
+                  final dateText = dt == null
+                      ? '-'
+                      : '${dt.day.toString().padLeft(2, '0')}/'
+                          '${dt.month.toString().padLeft(2, '0')}/'
+                          '${dt.year} '
+                          '${dt.hour.toString().padLeft(2, '0')}:'
+                          '${dt.minute.toString().padLeft(2, '0')}';
+
+                  final adminNote =
+                      (data['adminNote'] ?? '').toString().trim();
+                  final note = (data['note'] ?? '').toString().trim();
+
+                  final badge = _statusBadge(status.toLowerCase());
 
                   return Card(
                     child: ListTile(
-                      leading: const Icon(Icons.calendar_today),
-                      title: Text(
-                        '${dt.day}/${dt.month}/${dt.year} '
-                        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
+                      leading: Icon(badge.icon, color: badge.color),
+                      title: Text(dateText),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('สถานะ: ${badge.text}'),
+                          if (note.isNotEmpty) Text('หมายเหตุผู้ป่วย: $note'),
+                          if (adminNote.isNotEmpty)
+                            Text('หมายเหตุแอดมิน: $adminNote'),
+                        ],
                       ),
-                      subtitle: Text('สถานะ: ${data['status']}'),
                     ),
                   );
                 }).toList(),
@@ -83,4 +112,52 @@ class AdminUserDetailScreen extends StatelessWidget {
       ),
     );
   }
+
+  // เลือกวันที่สำหรับ sort
+  DateTime _sortDate(Map<String, dynamic> a) {
+    DateTime? dt;
+
+    final apptAt = a['appointmentAt'];
+    if (apptAt is Timestamp) dt = apptAt.toDate();
+    if (apptAt is DateTime) dt = apptAt;
+
+    final createdAtServer = a['createdAtServer'];
+    if (dt == null && createdAtServer is Timestamp) dt = createdAtServer.toDate();
+
+    final createdAt = a['createdAt'];
+    if (dt == null && createdAt is Timestamp) dt = createdAt.toDate();
+
+    final updatedAtServer = a['updatedAtServer'];
+    if (dt == null && updatedAtServer is Timestamp) dt = updatedAtServer.toDate();
+
+    final updatedAt = a['updatedAt'];
+    if (dt == null && updatedAt is Timestamp) dt = updatedAt.toDate();
+
+    return dt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  _Badge _statusBadge(String s) {
+    switch (s) {
+      case 'pending':
+        return _Badge('รออนุมัติ', Icons.hourglass_top, Colors.orange);
+      case 'approved':
+      case 'confirmed':
+        return _Badge('อนุมัติแล้ว', Icons.check_circle, Colors.green);
+      case 'rejected':
+        return _Badge('ปฏิเสธ', Icons.cancel, Colors.red);
+      case 'canceled':
+        return _Badge('ยกเลิก', Icons.block, Colors.grey);
+      case 'completed':
+        return _Badge('เสร็จสิ้น', Icons.verified, Colors.blueGrey);
+      default:
+        return _Badge('สถานะ: $s', Icons.info, Colors.blueGrey);
+    }
+  }
+}
+
+class _Badge {
+  final String text;
+  final IconData icon;
+  final Color color;
+  _Badge(this.text, this.icon, this.color);
 }

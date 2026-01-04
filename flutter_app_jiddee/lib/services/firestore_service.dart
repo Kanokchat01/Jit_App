@@ -9,9 +9,21 @@ class FirestoreService {
   // =========================
   // USER
   // =========================
+
   Stream<AppUser> watchUser(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((doc) {
       return AppUser.fromMap(doc.id, doc.data() ?? {});
+    });
+  }
+
+  /// สำหรับ Dashboard/รายชื่อผู้ป่วย (Admin)
+  Stream<List<AppUser>> watchPatientsForDashboard() {
+    return _db
+        .collection('users')
+        .where('role', isEqualTo: 'patient')
+        .snapshots()
+        .map((qs) {
+      return qs.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList();
     });
   }
 
@@ -52,9 +64,9 @@ class FirestoreService {
   }) async {
     await _db.collection('users').doc(uid).set({
       'name': name.trim(),
-      'phone': (phone != null && phone.trim().isNotEmpty) ? phone.trim() : null,
-      'age': (age != null && age.trim().isNotEmpty) ? age.trim() : null,
-      'gender': (gender != null && gender.trim().isNotEmpty) ? gender.trim() : null,
+      'phone': phone?.trim(),
+      'age': age?.trim(),
+      'gender': gender?.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -62,6 +74,7 @@ class FirestoreService {
   // =========================
   // PHQ-9
   // =========================
+
   Future<void> savePhq9Result(Phq9Result r) async {
     await _db.collection('phq9_results').add(r.toMap());
   }
@@ -87,6 +100,7 @@ class FirestoreService {
   // =========================
   // Deep Assessment (TMHI-55)
   // =========================
+
   Future<void> updateDeepAssessmentStatus({
     required String uid,
     required String deepRiskLevel, // green/yellow/red
@@ -102,22 +116,18 @@ class FirestoreService {
   }
 
   // =========================
-  // APPOINTMENT
+  // APPOINTMENT (collection: appointments)
   // =========================
-  // status: pending | approved | confirmed | rejected | canceled | completed
 
   Future<void> createAppointment({
     required AppUser user,
     required DateTime appointmentAt,
     String? note,
-    String? doctorUid,
   }) async {
-    // นัดได้เฉพาะ deep = red และทำ deep แล้ว
-    final deepIsRed = user.hasCompletedDeepAssessment &&
-        (user.deepRiskLevel ?? '').toLowerCase() == 'red';
-
-    if (!deepIsRed) {
-      throw Exception('FORBIDDEN: Appointment allowed only when Deep Assessment = red');
+    if (!(user.hasCompletedDeepAssessment && user.deepRiskLevel == 'red')) {
+      throw Exception(
+        'FORBIDDEN: Appointment allowed only when Deep Assessment = red',
+      );
     }
 
     final now = Timestamp.now();
@@ -125,25 +135,23 @@ class FirestoreService {
     await _db.collection('appointments').add({
       'patientUid': user.uid,
       'patientName': user.name,
-      'doctorUid': doctorUid,
-
       'appointmentAt': Timestamp.fromDate(appointmentAt),
-      'note': (note != null && note.trim().isNotEmpty) ? note.trim() : null,
-
+      'note': note,
       'status': 'pending',
 
-      // ✅ เก็บเวลาแบบ client (ใช้คัด latest ฝั่ง app ได้)
+      // ใช้ createdAt (client) + createdAtServer (server) เผื่อออฟไลน์
       'createdAt': now,
       'updatedAt': now,
-
-      // ✅ เผื่อใช้ในอนาคต (ไม่พึ่ง index ตอนนี้)
       'createdAtServer': FieldValue.serverTimestamp(),
       'updatedAtServer': FieldValue.serverTimestamp(),
+
+      // หมายเหตุจากแอดมิน/แพทย์
+      'adminNote': null,
     });
   }
 
-  /// ✅ IMPORTANT: เลิกใช้ orderBy เพื่อไม่ต้องสร้าง composite index
-  /// เราดึงทั้งหมดของ patientUid แล้วหา "ล่าสุด" ในแอปเอง
+  /// ✅ แสดงสถานะนัดหมายล่าสุดแบบ realtime (ไม่ต้องสร้าง Composite Index)
+  /// แก้โดย: query แค่ where(patientUid) แล้ว sort ฝั่ง client
   Stream<Map<String, dynamic>?> watchLatestAppointment(String patientUid) {
     return _db
         .collection('appointments')
@@ -152,87 +160,130 @@ class FirestoreService {
         .map((qs) {
       if (qs.docs.isEmpty) return null;
 
-      Map<String, dynamic>? best;
-      Timestamp? bestCreated;
+      final items = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
 
-      for (final d in qs.docs) {
-        final data = d.data();
-        final created = data['createdAt'];
-        Timestamp? createdTs;
+      items.sort((a, b) {
+        final ad = _apptSortDate(a);
+        final bd = _apptSortDate(b);
+        return bd.compareTo(ad); // ล่าสุดก่อน
+      });
 
-        if (created is Timestamp) createdTs = created;
-        // fallback: ถ้าไม่มี createdAt ให้ใช้ appointmentAt
-        if (createdTs == null && data['appointmentAt'] is Timestamp) {
-          createdTs = data['appointmentAt'] as Timestamp;
-        }
-
-        if (best == null) {
-          best = {'id': d.id, ...data};
-          bestCreated = createdTs;
-          continue;
-        }
-
-        // เปรียบเทียบเวลา (ถ้า null ให้ถือว่าเก่ากว่า)
-        final a = bestCreated?.millisecondsSinceEpoch ?? -1;
-        final b = createdTs?.millisecondsSinceEpoch ?? -1;
-
-        if (b > a) {
-          best = {'id': d.id, ...data};
-          bestCreated = createdTs;
-        }
-      }
-
-      return best;
+      return items.first;
     });
   }
 
-  /// ✅ active = pending / approved / confirmed
+  /// ✅ active = pending / approved / confirmed (realtime)
+  /// ทำแบบไม่ใช้ whereIn เพื่อเลี่ยง index
   Stream<Map<String, dynamic>?> watchActiveAppointment(String patientUid) {
-    return watchLatestAppointment(patientUid).map((latest) {
-      if (latest == null) return null;
-      final status = (latest['status'] ?? '').toString();
-      final isActive = status == 'pending' || status == 'approved' || status == 'confirmed';
-      return isActive ? latest : null;
+    return _db
+        .collection('appointments')
+        .where('patientUid', isEqualTo: patientUid)
+        .snapshots()
+        .map((qs) {
+      if (qs.docs.isEmpty) return null;
+
+      final items = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+
+      final active = items.where((m) {
+        final s = (m['status'] ?? '').toString().toLowerCase();
+        return s == 'pending' || s == 'approved' || s == 'confirmed';
+      }).toList();
+
+      if (active.isEmpty) return null;
+
+      active.sort((a, b) {
+        final ad = _apptSortDate(a);
+        final bd = _apptSortDate(b);
+        return bd.compareTo(ad);
+      });
+
+      return active.first;
     });
   }
 
+  /// Admin: ฟิลเตอร์นัดหมายตามสถานะ (ไม่ใช้ orderBy เพื่อลดปัญหา index)
+  /// status: pending | approved | rejected | canceled | completed | all
+  Stream<List<Map<String, dynamic>>> watchAppointmentsByStatus({
+    required String status,
+  }) {
+    Query<Map<String, dynamic>> q = _db.collection('appointments');
+
+    final s = status.toLowerCase();
+    if (s != 'all') {
+      q = q.where('status', isEqualTo: s);
+    }
+
+    return q.snapshots().map((qs) {
+      final list = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+
+      list.sort((a, b) {
+        final ad = _apptSortDate(a);
+        final bd = _apptSortDate(b);
+        return bd.compareTo(ad);
+      });
+
+      return list;
+    });
+  }
+
+  Stream<List<Map<String, dynamic>>> watchPendingAppointments() {
+    return watchAppointmentsByStatus(status: 'pending');
+  }
+
+  /// Admin: อัปเดตสถานะนัดหมาย (+ ใส่หมายเหตุได้)
+  /// - appendNote=true: ต่อข้อความ adminNote เดิม
   Future<void> updateAppointmentStatus({
     required String appointmentId,
     required String status,
     String? adminNote,
+    bool appendNote = false,
   }) async {
-    final now = Timestamp.now();
-    await _db.collection('appointments').doc(appointmentId).set({
-      'status': status,
-      'adminNote': adminNote,
-      'updatedAt': now,
+    final ref = _db.collection('appointments').doc(appointmentId);
+
+    String? noteToSave = adminNote?.trim();
+    if (noteToSave != null && noteToSave.isEmpty) noteToSave = null;
+
+    if (appendNote && noteToSave != null) {
+      final snap = await ref.get();
+      final old = (snap.data()?['adminNote'] ?? '').toString().trim();
+      if (old.isNotEmpty) {
+        noteToSave = '$old\n• $noteToSave';
+      }
+    }
+
+    await ref.set({
+      'status': status.toLowerCase(),
+      if (noteToSave != null) 'adminNote': noteToSave,
       'updatedAtServer': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.now(),
     }, SetOptions(merge: true));
   }
 
   // =========================
-  // DASHBOARD (ADMIN)
+  // Helpers
   // =========================
-  Stream<List<AppUser>> watchPatientsForDashboard() {
-    return _db.collection('users').snapshots().map((qs) {
-      final users = qs.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList();
-      final patients = users.where((u) => u.role == UserRole.patient).toList();
 
-      int rank(String? r) {
-        switch ((r ?? '').toLowerCase()) {
-          case 'red':
-            return 0;
-          case 'yellow':
-            return 1;
-          case 'green':
-            return 2;
-          default:
-            return 3;
-        }
-      }
+  /// เลือก “วันที่ใช้จัดเรียง” ของนัดหมาย
+  /// priority: appointmentAt > createdAtServer > createdAt > updatedAtServer > updatedAt > epoch
+  DateTime _apptSortDate(Map<String, dynamic> a) {
+    DateTime? dt;
 
-      patients.sort((a, b) => rank(a.phq9RiskLevel).compareTo(rank(b.phq9RiskLevel)));
-      return patients;
-    });
+    final apptAt = a['appointmentAt'];
+    if (apptAt is Timestamp) dt = apptAt.toDate();
+    if (apptAt is DateTime) dt = apptAt;
+
+    final createdAtServer = a['createdAtServer'];
+    if (dt == null && createdAtServer is Timestamp) dt = createdAtServer.toDate();
+
+    final createdAt = a['createdAt'];
+    if (dt == null && createdAt is Timestamp) dt = createdAt.toDate();
+
+    final updatedAtServer = a['updatedAtServer'];
+    if (dt == null && updatedAtServer is Timestamp) dt = updatedAtServer.toDate();
+
+    final updatedAt = a['updatedAt'];
+    if (dt == null && updatedAt is Timestamp) dt = updatedAt.toDate();
+
+    return dt ?? DateTime.fromMillisecondsSinceEpoch(0);
   }
 }
