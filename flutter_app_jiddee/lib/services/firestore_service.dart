@@ -98,7 +98,7 @@ class FirestoreService {
   }
 
   // =========================
-  // Deep Assessment (TMHI-55)
+  // Deep Assessment (TMHI-55) RESULT
   // =========================
 
   Future<void> updateDeepAssessmentStatus({
@@ -116,6 +116,58 @@ class FirestoreService {
   }
 
   // =========================
+  // Deep Assessment DRAFT (ทำค้างไว้แล้วกลับมาทำต่อ)
+  // path: users/{uid}/deep_draft/current
+  // =========================
+
+  Stream<Map<String, dynamic>?> watchDeepDraft(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('deep_draft')
+        .doc('current')
+        .snapshots()
+        .map((doc) => doc.exists ? (doc.data() ?? {}) : null);
+  }
+
+  /// บันทึก draft แบบ safe (ไม่ทับ startedAt ถ้ามีอยู่แล้ว)
+  Future<void> saveDeepDraft({
+    required String uid,
+    required List<int> answers, // แนะนำ length 55 (0..4)
+    required int currentIndex, // 0..54
+  }) async {
+    final ref = _db
+        .collection('users')
+        .doc(uid)
+        .collection('deep_draft')
+        .doc('current');
+
+    final snap = await ref.get();
+
+    final data = <String, dynamic>{
+      'answers': answers,
+      'currentIndex': currentIndex,
+      'version': 1,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (!snap.exists) {
+      data['startedAt'] = FieldValue.serverTimestamp();
+    }
+
+    await ref.set(data, SetOptions(merge: true));
+  }
+
+  Future<void> clearDeepDraft(String uid) async {
+    final ref = _db
+        .collection('users')
+        .doc(uid)
+        .collection('deep_draft')
+        .doc('current');
+    await ref.delete();
+  }
+
+  // =========================
   // APPOINTMENT (collection: appointments)
   // =========================
 
@@ -124,7 +176,9 @@ class FirestoreService {
     required DateTime appointmentAt,
     String? note,
   }) async {
-    if (!(user.hasCompletedDeepAssessment && user.deepRiskLevel == 'red')) {
+    final deep = (user.deepRiskLevel ?? '').toLowerCase();
+
+    if (!(user.hasCompletedDeepAssessment && deep == 'red')) {
       throw Exception(
         'FORBIDDEN: Appointment allowed only when Deep Assessment = red',
       );

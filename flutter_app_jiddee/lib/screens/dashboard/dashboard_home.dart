@@ -291,7 +291,7 @@ class DashboardHome extends StatelessWidget {
     return Row(
       children: [
         const Text(
-          'JidDee',
+          'JitDee',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const Spacer(),

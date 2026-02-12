@@ -31,7 +31,7 @@ class _DashboardShellState extends State<DashboardShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin • JidDee'),
+        title: const Text('Admin • JitDee'),
         actions: [
           IconButton(
             tooltip: 'ออกจากระบบ',
