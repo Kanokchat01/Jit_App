@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
@@ -14,10 +16,17 @@ class DeepAssessmentScreen extends StatefulWidget {
 
 class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   final _fs = FirestoreService();
+
   bool _saving = false;
 
   /// -1 = ยังไม่ตอบ, 0..3 = คำตอบ
   late List<int> _answers;
+
+  /// ใช้จำ “ข้อสุดท้ายที่แก้” เพื่อบันทึก currentIndex ใน draft
+  int _lastTouchedIndex = 0;
+
+  /// debounce autosave
+  Timer? _draftDebounce;
 
   // ✅ คำถาม TMHI-55 (ครบ 55 ข้อ)
   final List<String> _questions = const [
@@ -88,139 +97,349 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   void initState() {
     super.initState();
     _answers = List<int>.filled(_questions.length, -1);
+    _loadDraftIfAny();
+  }
+
+  @override
+  void dispose() {
+    _draftDebounce?.cancel();
+    super.dispose();
   }
 
   int get _answeredCount => _answers.where((a) => a >= 0).length;
   bool get _canSubmit => _answeredCount == _questions.length && !_saving;
+
+  // =========================
+  // Draft: Load / Save / Clear
+  // =========================
+
+  Future<void> _loadDraftIfAny() async {
+    try {
+      final draft = await _fs.watchDeepDraft(widget.user.uid).first;
+
+      if (!mounted) return;
+      if (draft == null) return;
+
+      final raw = draft['answers'];
+      final idx = (draft['currentIndex'] ?? 0);
+
+      if (raw is! List) return;
+
+      final restored = raw.map((e) {
+        if (e is int) return e;
+        if (e is num) return e.toInt();
+        return -1;
+      }).toList();
+
+      if (restored.length != _questions.length) return;
+
+      final answered = restored.where((a) => a >= 0).length;
+      if (answered == 0) return;
+
+      final choice = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('พบแบบสอบถามที่ทำค้างไว้'),
+          content: Text('คุณตอบไว้แล้ว $answered/${_questions.length} ข้อ\nต้องการทำต่อหรือเริ่มใหม่?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'new'),
+              child: const Text('เริ่มใหม่'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, 'continue'),
+              child: const Text('ทำต่อ'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (choice == 'continue') {
+        setState(() {
+          _answers = restored;
+          _lastTouchedIndex = (idx is int) ? idx.clamp(0, _questions.length - 1) : 0;
+        });
+
+        // บอกผู้ใช้ว่าค้างไว้แถวไหน (เลื่อนเองได้)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}')),
+        );
+      } else {
+        // เริ่มใหม่: เคลียร์ draft + reset answers
+        await _fs.clearDeepDraft(widget.user.uid);
+        if (!mounted) return;
+        setState(() {
+          _answers = List<int>.filled(_questions.length, -1);
+          _lastTouchedIndex = 0;
+        });
+      }
+    } catch (_) {
+      // ไม่ต้องทำอะไร ปล่อยผ่าน
+    }
+  }
+
+  void _scheduleAutoSave({required int touchedIndex}) {
+    _lastTouchedIndex = touchedIndex;
+
+    // ถ้ายังไม่ตอบเลย ไม่ต้องเซฟ
+    if (_answeredCount == 0) return;
+
+    _draftDebounce?.cancel();
+    _draftDebounce = Timer(const Duration(milliseconds: 650), () async {
+      try {
+        await _fs.saveDeepDraft(
+          uid: widget.user.uid,
+          answers: _answers,
+          currentIndex: _lastTouchedIndex,
+        );
+      } catch (_) {
+        // เงียบไว้ ไม่รบกวน UX
+      }
+    });
+  }
+
+  Future<void> _saveAndExit() async {
+    // ถ้าไม่ตอบเลย ก็ออกได้เลย
+    if (_answeredCount == 0) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await _fs.saveDeepDraft(
+        uid: widget.user.uid,
+        answers: _answers,
+        currentIndex: _lastTouchedIndex,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('บันทึกแบบร่างแล้ว')),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('บันทึกไม่สำเร็จ: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<bool> _confirmExitIfDirty() async {
+    if (_answeredCount == 0) return true;
+
+    final res = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('ออกจากหน้าแบบสอบถาม?'),
+        content: const Text('คุณทำแบบสอบถามค้างไว้ ต้องการบันทึกไว้ก่อนออกไหม'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: const Text('อยู่ต่อ'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'discard'),
+            child: const Text('ไม่บันทึก'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, 'save'),
+            child: const Text('บันทึก'),
+          ),
+        ],
+      ),
+    );
+
+    if (res == 'save') {
+      await _saveAndExit();
+      return false; // เรา pop เองแล้ว
+    }
+
+    if (res == 'discard') {
+      // ไม่บันทึก: แต่อย่าเคลียร์ draft อัตโนมัติ เผื่อเขาตั้งใจเก็บ (ถ้าต้องการเคลียร์จริง ค่อยทำปุ่มเฉพาะ)
+      return true;
+    }
+
+    return false;
+  }
+
+  // =========================
+  // UI
+  // =========================
 
   @override
   Widget build(BuildContext context) {
     final answered = _answeredCount;
     final total = _questions.length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('แบบสอบถามเชิงลึก (TMHI-55)'),
-        backgroundColor: Colors.orange,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.orange.withOpacity(0.25)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'กรุณาตอบตามความรู้สึกของคุณในช่วงที่ผ่านมา',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text('ให้คะแนน 0–3'),
-                    const Text('0 = ไม่เลย • 1 = เล็กน้อย • 2 = มาก • 3 = มากที่สุด'),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.check_circle, size: 16),
-                        const SizedBox(width: 6),
-                        Text('ตอบแล้ว $answered / $total ข้อ'),
-                      ],
-                    ),
-                  ],
-                ),
+    return WillPopScope(
+      onWillPop: () async {
+        final ok = await _confirmExitIfDirty();
+        return ok;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('แบบสอบถามเชิงลึก (TMHI-55)'),
+          backgroundColor: Colors.orange,
+          actions: [
+            TextButton.icon(
+              onPressed: _saving ? null : _saveAndExit,
+              icon: const Icon(Icons.save_alt, color: Colors.white),
+              label: const Text(
+                'บันทึกแล้วกลับ',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
               ),
             ),
-
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-                itemCount: _questions.length,
-                itemBuilder: (context, i) {
-                  final qNo = i + 1;
-                  final selected = _answers[i];
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(color: Colors.black.withOpacity(0.06)),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'ข้อที่ $qNo',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(_questions[i]),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 10,
-                            children: List.generate(4, (v) {
-                              final isOn = selected == v;
-                              return ChoiceChip(
-                                label: Text('$v'),
-                                selected: isOn,
-                                onSelected: (_) {
-                                  setState(() => _answers[i] = v);
-                                },
-                                selectedColor: Colors.orange.withOpacity(0.25),
-                              );
-                            }),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+            const SizedBox(width: 6),
           ],
         ),
-      ),
-
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: SizedBox(
-            height: 52,
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.orange.withOpacity(0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'กรุณาตอบตามความรู้สึกของคุณในช่วงที่ผ่านมา',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text('ให้คะแนน 0–3'),
+                      const Text('0 = ไม่เลย • 1 = เล็กน้อย • 2 = มาก • 3 = มากที่สุด'),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle, size: 16),
+                          const SizedBox(width: 6),
+                          Text('ตอบแล้ว $answered / $total ข้อ'),
+                          const Spacer(),
+                          if (answered > 0)
+                            Text(
+                              'Draft: ON',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              onPressed: _canSubmit ? _submit : null,
-              child: _saving
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
+
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+                  itemCount: _questions.length,
+                  itemBuilder: (context, i) {
+                    final qNo = i + 1;
+                    final selected = _answers[i];
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(color: Colors.black.withOpacity(0.06)),
                       ),
-                    )
-                  : Text('ส่งคำตอบ ($answered/$total)'),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'ข้อที่ $qNo',
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                                const Spacer(),
+                                if (selected >= 0)
+                                  Icon(Icons.check_circle, color: Colors.green.shade600, size: 18),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(_questions[i]),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              children: List.generate(4, (v) {
+                                final isOn = selected == v;
+                                return ChoiceChip(
+                                  label: Text('$v'),
+                                  selected: isOn,
+                                  onSelected: (_) {
+                                    setState(() => _answers[i] = v);
+                                    _scheduleAutoSave(touchedIndex: i);
+                                  },
+                                  selectedColor: Colors.orange.withOpacity(0.25),
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: _canSubmit ? _submit : null,
+                child: _saving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Text('ส่งคำตอบ ($answered/$total)'),
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
+  // =========================
+  // Scoring
+  // =========================
 
   int _calculateScore() {
     int total = 0;
@@ -250,10 +469,15 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     return (level: 'red', label: 'Poor (ควรเฝ้าระวัง)', color: Colors.red);
   }
 
+  // =========================
+  // Submit
+  // =========================
+
   Future<void> _submit() async {
     if (!_canSubmit) return;
 
     setState(() => _saving = true);
+    _draftDebounce?.cancel();
 
     try {
       final score = _calculateScore();
@@ -264,6 +488,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         deepRiskLevel: result.level,
         deepScore: score,
       );
+
+      // ✅ ส่งจริงแล้ว → เคลียร์ draft
+      await _fs.clearDeepDraft(widget.user.uid);
 
       if (!mounted) return;
 
@@ -289,11 +516,13 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text('ระดับ: ${result.label}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: result.color,
-                        )),
+                    Text(
+                      'ระดับ: ${result.label}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: result.color,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -318,7 +547,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
 
       // ✅ Flow หลังส่ง
       if (result.level == 'red') {
-        // ไปหน้านัดแพทย์
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -326,7 +554,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
           ),
         );
       } else {
-        // กลับหน้า Home (ให้ RoleGate/Stream อัปเดตสถานะเอง)
         Navigator.popUntil(context, (route) => route.isFirst);
       }
     } catch (e) {
