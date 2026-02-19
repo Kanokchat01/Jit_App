@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../services/firestore_service.dart';
+import 'verify_email_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -101,17 +103,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: pass.text,
       );
 
+      // สร้าง user doc ใน Firestore
       await FirestoreService().ensureUserDoc(
         uid: cred.user!.uid,
         name: name.text.trim(),
         role: 'patient',
       );
 
-      // ✅ สำคัญ: logout ก่อนกลับไปหน้า login
-      await FirebaseAuth.instance.signOut();
+      // ✅ ส่งอีเมลยืนยัน
+      await cred.user!.sendEmailVerification();
 
       if (!mounted) return;
-      Navigator.pop(context); // กลับไปหน้า Login
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('สมัครสำเร็จ! กรุณายืนยันอีเมล')),
+      );
+
+      // ✅ ไปหน้า VerifyEmailScreen ทันที (แทนกลับหน้า login)
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+        (route) => false,
+      );
     } on FirebaseAuthException catch (e) {
       setState(() => error = e.message);
     } finally {

@@ -14,6 +14,7 @@ class AdminAppointmentQueueScreen extends StatefulWidget {
 class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScreen> {
   final _fs = FirestoreService();
   final _searchCtrl = TextEditingController();
+  final _db = FirebaseFirestore.instance;
 
   /// pending | approved | rejected | canceled | completed | all
   String statusFilter = 'pending';
@@ -24,6 +25,28 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _addPatientNotification({
+    required String patientUid,
+    required String apptId,
+    required String title,
+    required String body,
+  }) async {
+    if (patientUid.trim().isEmpty) return;
+
+    await _db
+        .collection('users')
+        .doc(patientUid)
+        .collection('notifications')
+        .add({
+      'type': 'appointment_status',
+      'apptId': apptId,
+      'title': title,
+      'body': body,
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
   }
 
   @override
@@ -125,10 +148,6 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                 _statusChip('รออนุมัติ', 'pending', tone: _Tone.orange),
                 _statusChip('อนุมัติ', 'approved', tone: _Tone.green),
                 _statusChip('ปฏิเสธ', 'rejected', tone: _Tone.red),
-
-                // ❌ เอา Chip "ยกเลิก" ออก
-                // _statusChip('ยกเลิก', 'canceled', tone: _Tone.grey),
-
                 _statusChip('เสร็จสิ้น', 'completed', tone: _Tone.blueGrey),
                 _statusChip('ทั้งหมด', 'all', tone: _Tone.normal),
               ],
@@ -256,7 +275,7 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
 
           const SizedBox(height: 12),
 
-          // actions (เฉพาะ pending เท่านั้นให้กดอนุมัติ/ปฏิเสธเด่น)
+          // actions
           if (status == 'pending') ...[
             Row(
               children: [
@@ -267,11 +286,25 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                     onPressed: () async {
                       final note =
                           await _noteDialog(context, 'อนุมัติ', hint: 'ระบุหมายเหตุ (ถ้ามี)');
+
                       await _fs.updateAppointmentStatus(
                         appointmentId: id,
                         status: 'approved',
                         adminNote: note,
                       );
+
+                      // ✅ สร้าง in-app notification ให้ผู้ป่วย
+                      final body = (note != null && note.trim().isNotEmpty)
+                          ? 'แพทย์อนุมัติแล้ว: ${note.trim()}'
+                          : 'แพทย์อนุมัติแล้ว กรุณาตรวจสอบวันนัดในระบบ';
+
+                      await _addPatientNotification(
+                        patientUid: patientUid,
+                        apptId: id,
+                        title: 'คำขอนัดได้รับการอนุมัติ',
+                        body: body,
+                      );
+
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('อนุมัติแล้ว')),
@@ -294,11 +327,21 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                         );
                         return;
                       }
+
                       await _fs.updateAppointmentStatus(
                         appointmentId: id,
                         status: 'rejected',
                         adminNote: reason,
                       );
+
+                      // ✅ สร้าง in-app notification ให้ผู้ป่วย
+                      await _addPatientNotification(
+                        patientUid: patientUid,
+                        apptId: id,
+                        title: 'คำขอนัดถูกปฏิเสธ',
+                        body: 'เหตุผล: ${reason.trim()}',
+                      );
+
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('ปฏิเสธแล้ว')),
@@ -308,19 +351,7 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                 ),
               ],
             ),
-
-            // ❌ เอาปุ่ม “ยกเลิกคำขอ” ออกตรงนี้แล้ว
-            // const SizedBox(height: 10),
-            // Align(
-            //   alignment: Alignment.centerLeft,
-            //   child: TextButton.icon(
-            //     icon: const Icon(Icons.block),
-            //     label: const Text('ยกเลิกคำขอ'),
-            //     onPressed: () async {...},
-            //   ),
-            // ),
           ] else ...[
-            // ถ้าไม่ใช่ pending: ให้ปุ่ม “ทำเครื่องหมายเสร็จสิ้น” (เฉพาะ approved/confirmed)
             Row(
               children: [
                 if (status == 'approved' || status == 'confirmed') ...[
@@ -338,6 +369,15 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                           status: 'completed',
                           adminNote: 'เสร็จสิ้นโดยแอดมิน',
                         );
+
+                        // (ถ้าคุณไม่อยากแจ้งเตือนตอน completed ให้ลบบล็อกนี้ออกได้)
+                        await _addPatientNotification(
+                          patientUid: patientUid,
+                          apptId: id,
+                          title: 'การนัดหมายเสร็จสิ้น',
+                          body: 'การนัดหมายถูกทำเครื่องหมายว่าเสร็จสิ้นแล้ว',
+                        );
+
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('อัปเดตเป็นเสร็จสิ้นแล้ว')),
@@ -351,15 +391,17 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                       icon: const Icon(Icons.edit_note),
                       label: const Text('เพิ่มหมายเหตุ'),
                       onPressed: () async {
-                        final note = await _noteDialog(context, 'เพิ่มหมายเหตุ', hint: 'บันทึกหมายเหตุ');
+                        final note =
+                            await _noteDialog(context, 'เพิ่มหมายเหตุ', hint: 'บันทึกหมายเหตุ');
                         if (note == null || note.trim().isEmpty) return;
 
                         await _fs.updateAppointmentStatus(
                           appointmentId: id,
-                          status: status, // ไม่เปลี่ยนสถานะ
+                          status: status,
                           adminNote: note,
                           appendNote: true,
                         );
+
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('บันทึกหมายเหตุแล้ว')),
