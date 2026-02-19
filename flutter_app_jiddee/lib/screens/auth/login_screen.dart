@@ -95,8 +95,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // 👇 สมัครสมาชิก (อยู่ถูกที่แล้ว)
-              const SizedBox(height: 8),
+              // ✅ Forgot Password
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: loading ? null : _forgotPassword,
+                child: const Text('ลืมรหัสผ่าน?'),
+              ),
+
+              // สมัครสมาชิก
+              const SizedBox(height: 6),
               TextButton(
                 onPressed: () {
                   Navigator.push(
@@ -131,26 +138,58 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginOrRegister() async {
-    setState(() {
-      loading = true;
-      error = null;
-    });
+  setState(() {
+    loading = true;
+    error = null;
+  });
+
+  try {
+    final em = email.text.trim();
+    final pw = pass.text;
+
+    final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: em,
+      password: pw,
+    );
+
+    // ✅ debug log
+    debugPrint('LOGIN OK uid=${cred.user?.uid} verified=${cred.user?.emailVerified}');
+
+    await FirestoreService().ensureUserDoc(
+      uid: cred.user!.uid,
+      name: em,
+      role: 'patient',
+    );
+  } on FirebaseAuthException catch (e) {
+    debugPrint('LOGIN ERROR code=${e.code} msg=${e.message}');
+    setState(() => error = '${e.code}: ${e.message}');
+  } catch (e) {
+    debugPrint('LOGIN ERROR other=$e');
+    setState(() => error = e.toString());
+  } finally {
+    setState(() => loading = false);
+  }
+}
+
+
+  Future<void> _forgotPassword() async {
+    setState(() => error = null);
+
+    final em = email.text.trim();
+    if (em.isEmpty) {
+      setState(() => error = 'กรุณากรอกอีเมลก่อน แล้วค่อยกด "ลืมรหัสผ่าน"');
+      return;
+    }
 
     try {
-      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email.text.trim(),
-        password: pass.text,
-      );
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: em);
 
-      await FirestoreService().ensureUserDoc(
-        uid: cred.user!.uid,
-        name: email.text.trim(),
-        role: 'patient',
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ส่งลิงก์รีเซ็ตรหัสผ่านไปที่อีเมลแล้ว')),
       );
     } on FirebaseAuthException catch (e) {
       setState(() => error = e.message);
-    } finally {
-      setState(() => loading = false);
     }
   }
 }
