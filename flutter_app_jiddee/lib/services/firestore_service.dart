@@ -23,8 +23,8 @@ class FirestoreService {
         .where('role', isEqualTo: 'patient')
         .snapshots()
         .map((qs) {
-      return qs.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList();
-    });
+          return qs.docs.map((d) => AppUser.fromMap(d.id, d.data())).toList();
+        });
   }
 
   Future<void> ensureUserDoc({
@@ -61,12 +61,22 @@ class FirestoreService {
     String? phone,
     String? age,
     String? gender,
+    String? birthDate,
+    String? faculty,
+    String? major,
+    String? studentId,
+    String? year,
   }) async {
     await _db.collection('users').doc(uid).set({
       'name': name.trim(),
       'phone': phone?.trim(),
       'age': age?.trim(),
-      'gender': gender?.trim(),
+      'gender': gender,
+      'birthDate': birthDate?.trim(),
+      'faculty': faculty?.trim(),
+      'major': major?.trim(),
+      'studentId': studentId?.trim(),
+      'year': year?.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -186,21 +196,36 @@ class FirestoreService {
 
     final now = Timestamp.now();
 
-    await _db.collection('appointments').add({
+    // 🔥 1️⃣ สร้าง appointment ก่อน
+    final docRef = await _db.collection('appointments').add({
       'patientUid': user.uid,
       'patientName': user.name,
       'appointmentAt': Timestamp.fromDate(appointmentAt),
       'note': note,
       'status': 'pending',
 
-      // ใช้ createdAt (client) + createdAtServer (server) เผื่อออฟไลน์
       'createdAt': now,
       'updatedAt': now,
       'createdAtServer': FieldValue.serverTimestamp(),
       'updatedAtServer': FieldValue.serverTimestamp(),
 
-      // หมายเหตุจากแอดมิน/แพทย์
       'adminNote': null,
+    });
+
+    // 🔔 2️⃣ แจ้งเตือนแอดมิน
+    final formattedDate =
+        "${appointmentAt.day}/${appointmentAt.month}/${appointmentAt.year} "
+        "${appointmentAt.hour.toString().padLeft(2, '0')}:"
+        "${appointmentAt.minute.toString().padLeft(2, '0')}";
+
+    await _db.collection('admin_notifications').add({
+      'title': 'มีคำขอนัดหมายใหม่',
+      'body': 'คุณ ${user.name} ส่งคำขอนัดวันที่ $formattedDate',
+      'read': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'type': 'appointment',
+      'appointmentId': docRef.id,
+      'patientUid': user.uid,
     });
   }
 
@@ -212,18 +237,18 @@ class FirestoreService {
         .where('patientUid', isEqualTo: patientUid)
         .snapshots()
         .map((qs) {
-      if (qs.docs.isEmpty) return null;
+          if (qs.docs.isEmpty) return null;
 
-      final items = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+          final items = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
 
-      items.sort((a, b) {
-        final ad = _apptSortDate(a);
-        final bd = _apptSortDate(b);
-        return bd.compareTo(ad); // ล่าสุดก่อน
-      });
+          items.sort((a, b) {
+            final ad = _apptSortDate(a);
+            final bd = _apptSortDate(b);
+            return bd.compareTo(ad); // ล่าสุดก่อน
+          });
 
-      return items.first;
-    });
+          return items.first;
+        });
   }
 
   /// ✅ active = pending / approved / confirmed (realtime)
@@ -234,25 +259,25 @@ class FirestoreService {
         .where('patientUid', isEqualTo: patientUid)
         .snapshots()
         .map((qs) {
-      if (qs.docs.isEmpty) return null;
+          if (qs.docs.isEmpty) return null;
 
-      final items = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+          final items = qs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
 
-      final active = items.where((m) {
-        final s = (m['status'] ?? '').toString().toLowerCase();
-        return s == 'pending' || s == 'approved' || s == 'confirmed';
-      }).toList();
+          final active = items.where((m) {
+            final s = (m['status'] ?? '').toString().toLowerCase();
+            return s == 'pending' || s == 'approved' || s == 'confirmed';
+          }).toList();
 
-      if (active.isEmpty) return null;
+          if (active.isEmpty) return null;
 
-      active.sort((a, b) {
-        final ad = _apptSortDate(a);
-        final bd = _apptSortDate(b);
-        return bd.compareTo(ad);
-      });
+          active.sort((a, b) {
+            final ad = _apptSortDate(a);
+            final bd = _apptSortDate(b);
+            return bd.compareTo(ad);
+          });
 
-      return active.first;
-    });
+          return active.first;
+        });
   }
 
   /// Admin: ฟิลเตอร์นัดหมายตามสถานะ (ไม่ใช้ orderBy เพื่อลดปัญหา index)
@@ -327,13 +352,15 @@ class FirestoreService {
     if (apptAt is DateTime) dt = apptAt;
 
     final createdAtServer = a['createdAtServer'];
-    if (dt == null && createdAtServer is Timestamp) dt = createdAtServer.toDate();
+    if (dt == null && createdAtServer is Timestamp)
+      dt = createdAtServer.toDate();
 
     final createdAt = a['createdAt'];
     if (dt == null && createdAt is Timestamp) dt = createdAt.toDate();
 
     final updatedAtServer = a['updatedAtServer'];
-    if (dt == null && updatedAtServer is Timestamp) dt = updatedAtServer.toDate();
+    if (dt == null && updatedAtServer is Timestamp)
+      dt = updatedAtServer.toDate();
 
     final updatedAt = a['updatedAt'];
     if (dt == null && updatedAt is Timestamp) dt = updatedAt.toDate();

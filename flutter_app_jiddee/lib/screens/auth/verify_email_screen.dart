@@ -1,10 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../gates/auth_gate.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
-  const VerifyEmailScreen({super.key});
+  final String name;
+  final String phone;
+  final String birthDate;
+  final String faculty;
+  final String major;
+  final String studentId;
+  final String year;
+
+  const VerifyEmailScreen({
+    super.key,
+    required this.name,
+    required this.phone,
+    required this.birthDate,
+    required this.faculty,
+    required this.major,
+    required this.studentId,
+    required this.year,
+  });
 
   @override
   State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
@@ -13,90 +31,93 @@ class VerifyEmailScreen extends StatefulWidget {
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   bool loading = false;
 
-  void _goAuthGate() {
+  Future<void> _reloadAndCheck() async {
+    if (loading) return;
+
+    setState(() => loading = true);
+
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser;
+
+    if (user == null) {
+      setState(() => loading = false);
+      return;
+    }
+
+    await user.reload();
+    final refreshedUser = auth.currentUser;
+
+    // ❌ ยังไม่ verify
+    if (refreshedUser == null || !refreshedUser.emailVerified) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('กรุณายืนยันอีเมลก่อน')));
+      }
+      setState(() => loading = false);
+      return;
+    }
+
+    // ✅ ตรวจสอบว่ามี document แล้วหรือยัง
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(refreshedUser.uid);
+
+    final doc = await docRef.get();
+
+    // 🔥 ถ้ายังไม่มี document ค่อยสร้าง
+    if (!doc.exists) {
+      await docRef.set({
+        'uid': refreshedUser.uid,
+        'name': widget.name,
+        'email': refreshedUser.email,
+        'phone': widget.phone,
+        'birthDate': widget.birthDate,
+        'faculty': widget.faculty,
+        'major': widget.major,
+        'studentId': widget.studentId,
+        'year': widget.year,
+        'role': 'patient',
+        'consentCamera': false,
+        'hasCompletedPhq9': false,
+        'hasCompletedDeepAssessment': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    // logout เพื่อ reset state
+    await auth.signOut();
+
+    if (!mounted) return;
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const AuthGate()),
       (route) => false,
     );
+
+    if (mounted) setState(() => loading = false);
   }
 
-  Future<void> _reloadAndCheck() async {
-    if (loading) return;
-    setState(() => loading = true);
-
-    final auth = FirebaseAuth.instance;
-
-    try {
-      final current = auth.currentUser;
-
-      // ถ้า session หลุด -> กลับ AuthGate (AuthGate จะแสดง Login ให้อัตโนมัติ)
-      if (current == null) {
-        setState(() => loading = false);
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่')),
-        );
-        _goAuthGate();
-        return;
-      }
-
-      await current.reload();
-      final user = auth.currentUser;
-
-      setState(() => loading = false);
-      if (!mounted) return;
-
-      if (user != null && user.emailVerified) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ยืนยันอีเมลแล้ว ✅ กลับไปหน้าเข้าสู่ระบบ')),
-        );
-
-        // ทำให้ stream ยิง event แน่นอน
-        await auth.signOut();
-
-        if (!mounted) return;
-        _goAuthGate();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ยังไม่พบการยืนยันอีเมล (ลองรอ 10 วิแล้วกดอีกครั้ง)')),
-        );
-      }
-    } catch (e) {
-      setState(() => loading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-      );
-    }
-  }
-
-  Future<void> _resendVerification() async {
-    if (loading) return;
+  Future<void> _resendEmail() async {
     final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ไม่พบผู้ใช้ กรุณาเข้าสู่ระบบใหม่')),
-      );
-      _goAuthGate();
-      return;
-    }
-
-    try {
+    if (user != null) {
       await user.sendEmailVerification();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ส่งอีเมลยืนยันอีกครั้งแล้ว')),
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ส่งไม่สำเร็จ: ${e.code}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ส่งอีเมลอีกครั้งแล้ว')));
     }
+  }
+
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthGate()),
+      (route) => false,
+    );
   }
 
   @override
@@ -117,39 +138,24 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 18),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'ไปที่อีเมลแล้ว “กดลิงก์ยืนยัน” (อาจอยู่ใน Spam/Promotions)\n'
-                'จากนั้นกลับมากด "ฉันยืนยันแล้ว"',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
+
               SizedBox(
                 width: double.infinity,
-                height: 48,
                 child: ElevatedButton(
                   onPressed: loading ? null : _reloadAndCheck,
                   child: loading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('ฉันยืนยันแล้ว'),
+                      : const Text("ฉันยืนยันแล้ว"),
                 ),
               ),
-              const SizedBox(height: 8),
+
               TextButton(
-                onPressed: loading ? null : _resendVerification,
-                child: const Text('ส่งอีเมลอีกครั้ง'),
+                onPressed: _resendEmail,
+                child: const Text("ส่งอีเมลอีกครั้ง"),
               ),
-              TextButton(
-                onPressed: loading
-                    ? null
-                    : () async {
-                        await FirebaseAuth.instance.signOut();
-                        if (!mounted) return;
-                        _goAuthGate();
-                      },
-                child: const Text('ออกจากระบบ'),
-              ),
+
+              TextButton(onPressed: _logout, child: const Text("ออกจากระบบ")),
             ],
           ),
         ),

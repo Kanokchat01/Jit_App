@@ -4,10 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/app_user.dart';
 import '../gates/auth_gate.dart';
 
-// ✅ import ให้ตรง path จริง
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_appointment_queue_screen.dart';
-import '../addmin/admin_user_list_screen.dart';
+import '../addmin/admin_user_list_screen.dart'; // ใช้ path เดิมของคุณ
+import '../screens/admin/admin_news_screen.dart'; // ✅ เพิ่ม
 
 class DashboardShell extends StatefulWidget {
   final AppUser user;
@@ -22,11 +22,12 @@ class _DashboardShellState extends State<DashboardShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ ใช้ widget ที่มีอยู่จริง
-    final pages = const [
-      AdminDashboardScreen(),
-      AdminUserListScreen(),
-      AdminAppointmentQueueScreen(),
+    // ❌ เอา const ออกเพื่อกัน error
+    final pages = [
+      const AdminDashboardScreen(),
+      const AdminUserListScreen(),
+      const AdminAppointmentQueueScreen(),
+      const AdminNewsScreen(), // ✅ เพิ่มหน้า News
     ];
 
     return Scaffold(
@@ -60,7 +61,6 @@ class _DashboardShellState extends State<DashboardShell> {
               await FirebaseAuth.instance.signOut();
               if (!context.mounted) return;
 
-              // ✅ เคลียร์ stack กลับ AuthGate
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const AuthGate()),
                 (route) => false,
@@ -75,18 +75,20 @@ class _DashboardShellState extends State<DashboardShell> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index,
         onTap: (i) => setState(() => index = i),
+        type: BottomNavigationBarType.fixed, // กัน label หาย
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'ผู้ป่วย',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'ผู้ป่วย'),
           BottomNavigationBarItem(
             icon: Icon(Icons.event_note),
             label: 'คิวนัด',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.article),
+            label: 'News', // ✅ เพิ่มปุ่ม
           ),
         ],
       ),

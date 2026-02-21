@@ -8,6 +8,7 @@ class Appointment {
   final String status; // pending, approved, rejected, canceled
   final String? note;
   final DateTime? updatedAt;
+  final DateTime? requestedAt;
 
   Appointment({
     required this.id,
@@ -17,10 +18,12 @@ class Appointment {
     this.doctorId,
     this.note,
     this.updatedAt,
+    this.requestedAt,
   });
 
   factory Appointment.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
     return Appointment(
       id: doc.id,
       patientId: data['patientId'] ?? '',
@@ -30,6 +33,9 @@ class Appointment {
       note: data['note'],
       updatedAt: (data['updatedAt'] is Timestamp)
           ? (data['updatedAt'] as Timestamp).toDate()
+          : null,
+      requestedAt: (data['requestedAt'] is Timestamp)
+          ? (data['requestedAt'] as Timestamp).toDate()
           : null,
     );
   }
@@ -44,5 +50,30 @@ class Appointment {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'requestedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  // ============================================================
+  // 🔔 แจ้งเตือนแอดมินเมื่อมีการสร้างคำขอนัดใหม่
+  // ============================================================
+  static Future<void> notifyAdminNewAppointment({
+    required String appointmentId,
+    required String patientId,
+    required String patientName,
+    required DateTime appointmentAt,
+  }) async {
+    final formattedDate =
+        "${appointmentAt.day}/${appointmentAt.month}/${appointmentAt.year} "
+        "${appointmentAt.hour.toString().padLeft(2, '0')}:"
+        "${appointmentAt.minute.toString().padLeft(2, '0')}";
+
+    await FirebaseFirestore.instance.collection('admin_notifications').add({
+      'title': 'มีคำขอนัดหมายใหม่',
+      'body': 'คุณ $patientName ส่งคำขอนัดวันที่ $formattedDate',
+      'read': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'type': 'appointment',
+      'appointmentId': appointmentId,
+      'patientId': patientId,
+    });
   }
 }
