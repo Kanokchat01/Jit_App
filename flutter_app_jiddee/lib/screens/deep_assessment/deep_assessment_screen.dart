@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/app_user.dart';
 import '../../services/firestore_service.dart';
 import '../patient/appointment_screen.dart';
+import '../../services/notification_service.dart';
 
 class DeepAssessmentScreen extends StatefulWidget {
   final AppUser user;
@@ -90,7 +91,19 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   /// ✅ กลุ่ม 2 “กลับคะแนน” ตามรูปที่คุณส่งมา:
   /// 5,6,7,8,9,10,11,12,13,25,26,27,28
   final Set<int> _reverseItems = const {
-    5, 6, 7, 8, 9, 10, 11, 12, 13, 25, 26, 27, 28
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    25,
+    26,
+    27,
+    28,
   };
 
   @override
@@ -141,7 +154,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         barrierDismissible: false,
         builder: (_) => AlertDialog(
           title: const Text('พบแบบสอบถามที่ทำค้างไว้'),
-          content: Text('คุณตอบไว้แล้ว $answered/${_questions.length} ข้อ\nต้องการทำต่อหรือเริ่มใหม่?'),
+          content: Text(
+            'คุณตอบไว้แล้ว $answered/${_questions.length} ข้อ\nต้องการทำต่อหรือเริ่มใหม่?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, 'new'),
@@ -160,12 +175,18 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       if (choice == 'continue') {
         setState(() {
           _answers = restored;
-          _lastTouchedIndex = (idx is int) ? idx.clamp(0, _questions.length - 1) : 0;
+          _lastTouchedIndex = (idx is int)
+              ? idx.clamp(0, _questions.length - 1)
+              : 0;
         });
 
         // บอกผู้ใช้ว่าค้างไว้แถวไหน (เลื่อนเองได้)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}')),
+          SnackBar(
+            content: Text(
+              'โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}',
+            ),
+          ),
         );
       } else {
         // เริ่มใหม่: เคลียร์ draft + reset answers
@@ -218,15 +239,15 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('บันทึกแบบร่างแล้ว')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('บันทึกแบบร่างแล้ว')));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('บันทึกไม่สำเร็จ: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('บันทึกไม่สำเร็จ: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -294,7 +315,10 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
               icon: const Icon(Icons.save_alt, color: Colors.white),
               label: const Text(
                 'บันทึกแล้วกลับ',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             const SizedBox(width: 6),
@@ -322,7 +346,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                       ),
                       const SizedBox(height: 6),
                       const Text('ให้คะแนน 0–3'),
-                      const Text('0 = ไม่เลย • 1 = เล็กน้อย • 2 = มาก • 3 = มากที่สุด'),
+                      const Text(
+                        '0 = ไม่เลย • 1 = เล็กน้อย • 2 = มาก • 3 = มากที่สุด',
+                      ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -368,11 +394,17 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                               children: [
                                 Text(
                                   'ข้อที่ $qNo',
-                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                                 const Spacer(),
                                 if (selected >= 0)
-                                  Icon(Icons.check_circle, color: Colors.green.shade600, size: 18),
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green.shade600,
+                                    size: 18,
+                                  ),
                               ],
                             ),
                             const SizedBox(height: 6),
@@ -389,7 +421,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                                     setState(() => _answers[i] = v);
                                     _scheduleAutoSave(touchedIndex: i);
                                   },
-                                  selectedColor: Colors.orange.withOpacity(0.25),
+                                  selectedColor: Colors.orange.withOpacity(
+                                    0.25,
+                                  ),
                                 );
                               }),
                             ),
@@ -489,6 +523,13 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         deepScore: score,
       );
 
+      // 🔶 ถ้า Deep เป็นเหลือง → schedule reminder (เทส 1 นาที)
+      if (result.level == 'yellow') {
+        NotificationService.instance.scheduleDeepReminderTest(
+          uid: widget.user.uid,
+        );
+      }
+
       // ✅ ส่งจริงแล้ว → เคลียร์ draft
       await _fs.clearDeepDraft(widget.user.uid);
 
@@ -558,9 +599,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ส่งคำตอบไม่สำเร็จ: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('ส่งคำตอบไม่สำเร็จ: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -13,10 +13,7 @@ import '../services/notification_service.dart';
 class RoleGate extends StatefulWidget {
   final User firebaseUser;
 
-  const RoleGate({
-    super.key,
-    required this.firebaseUser,
-  });
+  const RoleGate({super.key, required this.firebaseUser});
 
   @override
   State<RoleGate> createState() => _RoleGateState();
@@ -85,9 +82,7 @@ class _RoleGateState extends State<RoleGate> {
         }
 
         if (!snap.hasData) {
-          return const Scaffold(
-            body: Center(child: Text('ไม่พบข้อมูลผู้ใช้')),
-          );
+          return const Scaffold(body: Center(child: Text('ไม่พบข้อมูลผู้ใช้')));
         }
 
         final appUser = snap.data!;

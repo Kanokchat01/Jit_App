@@ -21,16 +21,27 @@ class AuthGate extends StatelessWidget {
 
         final user = snap.data;
 
+        // 🔹 ยังไม่ login
         if (user == null) {
           return const LoginScreen();
         }
 
-        // ✅ ถ้ายังไม่ยืนยันอีเมล -> ไปหน้า Verify
+        // 🔹 login แล้ว แต่ยังไม่ verify → ไปหน้า VerifyEmailScreen
+        //    (ส่งค่าว่าง เพราะข้อมูลจะถูกดึงจาก Firestore ตอน verify สำเร็จ
+        //     หรือผู้ใช้อาจเป็นคนที่กลับมา login ใหม่หลัง register ไม่สำเร็จ)
         if (!user.emailVerified) {
-          return const VerifyEmailScreen();
+          return const VerifyEmailScreen(
+            name: '',
+            phone: '',
+            birthDate: '',
+            faculty: '',
+            major: '',
+            studentId: '',
+            year: '',
+          );
         }
 
-        // ✅ ส่ง Firebase User เข้า RoleGate
+        // 🔹 verify แล้ว → เข้า RoleGate
         return RoleGate(firebaseUser: user);
       },
     );

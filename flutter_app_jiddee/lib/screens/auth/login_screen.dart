@@ -35,14 +35,39 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 48,
-                backgroundColor: primaryColor,
-                child: const Icon(
-                  Icons.local_hospital,
-                  size: 48,
-                  color: Colors.white,
-                ),
+              Column(
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: [
+                        BoxShadow(
+                          blurRadius: 25,
+                          color: Colors.black.withOpacity(.08),
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(32),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'JitDee',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: primaryColor,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 
@@ -138,39 +163,40 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginOrRegister() async {
-  setState(() {
-    loading = true;
-    error = null;
-  });
+    setState(() {
+      loading = true;
+      error = null;
+    });
 
-  try {
-    final em = email.text.trim();
-    final pw = pass.text;
+    try {
+      final em = email.text.trim();
+      final pw = pass.text;
 
-    final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: em,
-      password: pw,
-    );
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: em,
+        password: pw,
+      );
 
-    // ✅ debug log
-    debugPrint('LOGIN OK uid=${cred.user?.uid} verified=${cred.user?.emailVerified}');
+      // ✅ debug log
+      debugPrint(
+        'LOGIN OK uid=${cred.user?.uid} verified=${cred.user?.emailVerified}',
+      );
 
-    await FirestoreService().ensureUserDoc(
-      uid: cred.user!.uid,
-      name: em,
-      role: 'patient',
-    );
-  } on FirebaseAuthException catch (e) {
-    debugPrint('LOGIN ERROR code=${e.code} msg=${e.message}');
-    setState(() => error = '${e.code}: ${e.message}');
-  } catch (e) {
-    debugPrint('LOGIN ERROR other=$e');
-    setState(() => error = e.toString());
-  } finally {
-    setState(() => loading = false);
+      await FirestoreService().ensureUserDoc(
+        uid: cred.user!.uid,
+        name: em,
+        role: 'patient',
+      );
+    } on FirebaseAuthException catch (e) {
+      debugPrint('LOGIN ERROR code=${e.code} msg=${e.message}');
+      setState(() => error = '${e.code}: ${e.message}');
+    } catch (e) {
+      debugPrint('LOGIN ERROR other=$e');
+      setState(() => error = e.toString());
+    } finally {
+      setState(() => loading = false);
+    }
   }
-}
-
 
   Future<void> _forgotPassword() async {
     setState(() => error = null);
