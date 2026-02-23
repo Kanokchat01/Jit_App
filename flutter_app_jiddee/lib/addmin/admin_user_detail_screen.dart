@@ -10,45 +10,119 @@ class AdminUserDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      //ส่วนของฟังชั่นลบuser
-      /*appBar: AppBar(
-        title: Text(user.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () => _confirmDelete(context),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              cs.primary.withOpacity(0.08),
+              cs.secondary.withOpacity(0.10),
+              Colors.white,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-        ],
-      ),*/
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _topBar(context),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                  children: [
+                    _buildPatientCard(context),
+
+                    const SizedBox(height: 14),
+                    _sectionHeader(
+                      context: context,
+                      title: 'การนัดแพทย์',
+                      icon: Icons.calendar_month_outlined,
+                    ),
+                    const SizedBox(height: 10),
+                    _buildAppointments(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  // =========================
+  // Top Bar (UI only)
+  // =========================
+  Widget _topBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Row(
         children: [
-          _buildPatientCard(context),
-
-          const SizedBox(height: 24),
-          const Divider(),
-
-          const Text(
-            'การนัดแพทย์',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.92),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                    color: Colors.black.withOpacity(0.06),
+                  ),
+                ],
+              ),
+              child: Icon(Icons.arrow_back, color: Colors.black.withOpacity(0.75)),
+            ),
           ),
-          const SizedBox(height: 12),
-
-          _buildAppointments(),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'รายละเอียดผู้ป่วย',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Colors.black.withOpacity(0.82),
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: cs.primary.withOpacity(0.18)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.shield_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'Admin',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: cs.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   // =========================
-  // 🎨 Dynamic Card Color
+  // 🎨 Dynamic Card Color (เดิม)
   // =========================
 
   Color _cardColor() {
@@ -82,107 +156,256 @@ class AdminUserDetailScreen extends StatelessWidget {
   }
 
   // =========================
-  // 🏥 Patient Card
+  // 🏥 Patient Card (ตกแต่งใหม่ แต่ logic เดิม)
   // =========================
 
   Widget _buildPatientCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final age = _calculateAge(user.birthDate);
 
-    return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Column(
-        children: [
-          Container(
-            height: 8,
-            decoration: BoxDecoration(
-              color: _topStripColor(),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(18),
-              ),
-            ),
+    final strip = _topStripColor();
+    final soft = _cardColor();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+            color: Colors.black.withOpacity(0.06),
           ),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: _cardColor(),
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(18),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          children: [
+            // top strip + soft background gradient inside
+            Container(
+              height: 10,
+              color: strip,
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    soft.withOpacity(0.95),
+                    Colors.white.withOpacity(0.92),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // avatar + name
+                  Row(
+                    children: [
+                      Container(
+                        width: 62,
+                        height: 62,
+                        decoration: BoxDecoration(
+                          color: strip.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: strip.withOpacity(0.20)),
+                        ),
+                        child: Icon(Icons.person, color: strip, size: 34),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.name.isEmpty ? '(ไม่มีชื่อ)' : user.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              (user.email ?? '-'),
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.55),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _riskChip(
+                        label: 'Deep',
+                        value: user.hasCompletedDeepAssessment ? (user.deepRiskLevel ?? '-') : 'ยังไม่ทำ',
+                        color: strip,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // quick pills
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _pill(
+                        icon: Icons.phone_outlined,
+                        text: (user.phone ?? '-'),
+                        cs: cs,
+                      ),
+                      _pill(
+                        icon: Icons.cake_outlined,
+                        text: (user.birthDate ?? '-'),
+                        cs: cs,
+                      ),
+                      _pill(
+                        icon: Icons.badge_outlined,
+                        text: age ?? '-',
+                        cs: cs,
+                      ),
+                      _pill(
+                        icon: Icons.wc_outlined,
+                        text: (user.gender ?? '-'),
+                        cs: cs,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+                  Container(
+                    height: 1,
+                    color: Colors.black.withOpacity(0.06),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // info grid (เดิมคือ Wrap infoItem)
+                  _subTitle('ข้อมูลการศึกษา / โปรไฟล์'),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 10,
+                    children: [
+                      _infoItem('คณะ', user.faculty ?? '-'),
+                      _infoItem('สาขา', user.major ?? '-'),
+                      _infoItem('รหัสนักศึกษา', user.studentId ?? '-'),
+                      _infoItem('ชั้นปี', user.year ?? '-'),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+                  Container(
+                    height: 1,
+                    color: Colors.black.withOpacity(0.06),
+                  ),
+                  const SizedBox(height: 14),
+
+                  _subTitle('ผลการประเมิน'),
+                  const SizedBox(height: 10),
+
+                  _statusRow(
+                    context: context,
+                    label: 'PHQ-9',
+                    value: user.hasCompletedPhq9 ? (user.phq9RiskLevel ?? '-') : 'ยังไม่ได้ประเมิน',
+                    color: _riskColorFromValue(user.phq9RiskLevel),
+                  ),
+                  const SizedBox(height: 8),
+                  _statusRow(
+                    context: context,
+                    label: 'Deep Assessment',
+                    value: user.hasCompletedDeepAssessment ? (user.deepRiskLevel ?? '-') : 'ยังไม่ได้ประเมิน',
+                    color: _riskColorFromValue(user.deepRiskLevel),
+                  ),
+                ],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor: _topStripColor(),
-                      child: const Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 38,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user.name,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            user.email ?? '-',
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                const SizedBox(height: 20),
-                const Divider(),
+  Color _riskColorFromValue(String? v) {
+    final s = (v ?? '').toLowerCase();
+    switch (s) {
+      case 'red':
+        return Colors.red;
+      case 'yellow':
+        return Colors.orange;
+      case 'green':
+        return Colors.green;
+      default:
+        return Colors.blueGrey;
+    }
+  }
 
-                Wrap(
-                  spacing: 20,
-                  runSpacing: 10,
-                  children: [
-                    _infoItem('เบอร์โทร', user.phone ?? '-'),
-                    _infoItem('วันเกิด', user.birthDate ?? '-'),
-                    _infoItem('อายุ', age ?? '-'),
-                    _infoItem('เพศ', user.gender ?? '-'),
-                    _infoItem('คณะ', user.faculty ?? '-'),
-                    _infoItem('สาขา', user.major ?? '-'),
-                    _infoItem('รหัสนักศึกษา', user.studentId ?? '-'),
-                    _infoItem('ชั้นปี', user.year ?? '-'),
-                  ],
-                ),
+  Widget _subTitle(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontWeight: FontWeight.w900,
+        color: Colors.black.withOpacity(0.72),
+      ),
+    );
+  }
 
-                const SizedBox(height: 16),
-
-                _statusRow(
-                  'PHQ-9',
-                  user.hasCompletedPhq9
-                      ? (user.phq9RiskLevel ?? '-')
-                      : 'ยังไม่ได้ประเมิน',
-                ),
-                const SizedBox(height: 8),
-                _statusRow(
-                  'Deep Assessment',
-                  user.hasCompletedDeepAssessment
-                      ? (user.deepRiskLevel ?? '-')
-                      : 'ยังไม่ได้ประเมิน',
-                ),
-              ],
+  Widget _pill({
+    required IconData icon,
+    required String text,
+    required ColorScheme cs,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: cs.primary.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.primary.withOpacity(0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Colors.black.withOpacity(0.70),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _riskChip({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.22)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          color: color,
+        ),
       ),
     );
   }
@@ -190,37 +413,89 @@ class AdminUserDetailScreen extends StatelessWidget {
   Widget _infoItem(String label, String value) {
     return SizedBox(
       width: 160,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.78),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.55),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: Colors.black.withOpacity(0.82),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow({
+    required BuildContext context,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+      ),
+      child: Row(
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: color.withOpacity(0.22)),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _statusRow(String label, String value) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 150,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        Chip(label: Text(value)),
-      ],
-    );
-  }
-
   // =========================
-  // 📅 Appointments
+  // 📅 Appointments (ตกแต่งใหม่ แต่ logic เดิม)
   // =========================
 
   Widget _buildAppointments() {
@@ -230,13 +505,40 @@ class AdminUserDetailScreen extends StatelessWidget {
           .where('patientUid', isEqualTo: user.uid)
           .snapshots(),
       builder: (context, snap) {
+        final cs = Theme.of(context).colorScheme;
+
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: CircularProgressIndicator(color: cs.primary),
+            ),
+          );
         }
 
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
-          return const Text('ยังไม่มีการนัดแพทย์');
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.92),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.black.withOpacity(0.05)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.event_busy, color: Colors.black.withOpacity(0.45)),
+                const SizedBox(width: 10),
+                Text(
+                  'ยังไม่มีการนัดแพทย์',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black.withOpacity(0.65),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
         final items = docs.map((d) => {'id': d.id, ...d.data()}).toList();
@@ -251,20 +553,104 @@ class AdminUserDetailScreen extends StatelessWidget {
             final apptAt = data['appointmentAt'];
             if (apptAt is Timestamp) dt = apptAt.toDate();
 
-            final dateText = dt == null
-                ? '-'
-                : DateFormat('dd/MM/yyyy HH:mm').format(dt);
+            final dateText = dt == null ? '-' : DateFormat('dd/MM/yyyy HH:mm').format(dt);
 
-            return Card(
-              child: ListTile(
-                leading: Icon(badge.icon, color: badge.color),
-                title: Text(dateText),
-                subtitle: Text('สถานะ: ${badge.text}'),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.94),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.black.withOpacity(0.05)),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                    color: Colors.black.withOpacity(0.05),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: badge.color.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: badge.color.withOpacity(0.20)),
+                    ),
+                    child: Icon(badge.icon, color: badge.color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          dateText,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'สถานะ: ${badge.text}',
+                          style: TextStyle(
+                            color: Colors.black.withOpacity(0.60),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: badge.color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: badge.color.withOpacity(0.22)),
+                    ),
+                    child: Text(
+                      badge.text,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: badge.color,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           }).toList(),
         );
       },
+    );
+  }
+
+  Widget _sectionHeader({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Icon(icon, size: 18, color: Colors.black.withOpacity(0.70)),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+      ],
     );
   }
 
@@ -293,8 +679,7 @@ class AdminUserDetailScreen extends StatelessWidget {
       final parsed = DateFormat('dd/MM/yyyy').parse(birthDate);
       final now = DateTime.now();
       int age = now.year - parsed.year;
-      if (now.month < parsed.month ||
-          (now.month == parsed.month && now.day < parsed.day)) {
+      if (now.month < parsed.month || (now.month == parsed.month && now.day < parsed.day)) {
         age--;
       }
       return '$age ปี';
@@ -302,44 +687,6 @@ class AdminUserDetailScreen extends StatelessWidget {
       return null;
     }
   }
-
-  // =========================
-  // 🗑 Delete User
-  // =========================
-  //ส่วนของปุ่มฟังชั่นลบuser
-  /*Future<void> _confirmDelete(BuildContext context) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('ยืนยันการลบผู้ใช้'),
-        content: const Text(
-          'คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้รายนี้?\nการกระทำนี้ไม่สามารถย้อนกลับได้',
-        ),
-        actions: [
-          TextButton(
-            child: const Text('ยกเลิก'),
-            onPressed: () => Navigator.pop(context, false),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('ลบ'),
-            onPressed: () => Navigator.pop(context, true),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .delete();
-
-      if (context.mounted) {
-        Navigator.pop(context);
-      }
-    }
-  }*/
 }
 
 class _Badge {

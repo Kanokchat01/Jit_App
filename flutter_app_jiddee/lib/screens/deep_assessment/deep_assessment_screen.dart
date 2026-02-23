@@ -16,8 +16,10 @@ class DeepAssessmentScreen extends StatefulWidget {
 }
 
 class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
+  // =========================
+  // ✅ Logic เดิม (ห้ามแตะ)
+  // =========================
   final _fs = FirestoreService();
-
   bool _saving = false;
 
   /// -1 = ยังไม่ตอบ, 0..3 = คำตอบ
@@ -88,22 +90,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     'เมื่อท่านเดือดร้อนจะมีหน่วยงานในชุมชน(เช่น มูลนิธิ ชมรม สมาคม วัด สุเหร่า ฯลฯ) มาช่วยเหลือดูแลท่าน',
   ];
 
-  /// ✅ กลุ่ม 2 “กลับคะแนน” ตามรูปที่คุณส่งมา:
-  /// 5,6,7,8,9,10,11,12,13,25,26,27,28
+  /// ✅ กลุ่ม 2 “กลับคะแนน”
   final Set<int> _reverseItems = const {
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    25,
-    26,
-    27,
-    28,
+    5, 6, 7, 8, 9, 10, 11, 12, 13, 25, 26, 27, 28,
   };
 
   @override
@@ -123,7 +112,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   bool get _canSubmit => _answeredCount == _questions.length && !_saving;
 
   // =========================
-  // Draft: Load / Save / Clear
+  // Draft: Load / Save / Clear (เดิม)
   // =========================
 
   Future<void> _loadDraftIfAny() async {
@@ -180,16 +169,19 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
               : 0;
         });
 
-        // บอกผู้ใช้ว่าค้างไว้แถวไหน (เลื่อนเองได้)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}',
-            ),
-          ),
-        );
+              SnackBar(
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                content: Text(
+                  'โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                duration: const Duration(seconds: 2),
+              ),
+            );
       } else {
-        // เริ่มใหม่: เคลียร์ draft + reset answers
         await _fs.clearDeepDraft(widget.user.uid);
         if (!mounted) return;
         setState(() {
@@ -197,15 +189,12 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
           _lastTouchedIndex = 0;
         });
       }
-    } catch (_) {
-      // ไม่ต้องทำอะไร ปล่อยผ่าน
-    }
+    } catch (_) {}
   }
 
   void _scheduleAutoSave({required int touchedIndex}) {
     _lastTouchedIndex = touchedIndex;
 
-    // ถ้ายังไม่ตอบเลย ไม่ต้องเซฟ
     if (_answeredCount == 0) return;
 
     _draftDebounce?.cancel();
@@ -216,14 +205,11 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
           answers: _answers,
           currentIndex: _lastTouchedIndex,
         );
-      } catch (_) {
-        // เงียบไว้ ไม่รบกวน UX
-      }
+      } catch (_) {}
     });
   }
 
   Future<void> _saveAndExit() async {
-    // ถ้าไม่ตอบเลย ก็ออกได้เลย
     if (_answeredCount == 0) {
       if (!mounted) return;
       Navigator.pop(context);
@@ -239,15 +225,13 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('บันทึกแบบร่างแล้ว')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('บันทึกแบบร่างแล้ว')));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('บันทึกไม่สำเร็จ: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('บันทึกไม่สำเร็จ: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -280,199 +264,457 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
 
     if (res == 'save') {
       await _saveAndExit();
-      return false; // เรา pop เองแล้ว
+      return false;
     }
 
-    if (res == 'discard') {
-      // ไม่บันทึก: แต่อย่าเคลียร์ draft อัตโนมัติ เผื่อเขาตั้งใจเก็บ (ถ้าต้องการเคลียร์จริง ค่อยทำปุ่มเฉพาะ)
-      return true;
-    }
-
+    if (res == 'discard') return true;
     return false;
   }
 
   // =========================
-  // UI
+  // ✅ UI ใหม่ (ตกแต่งเท่านั้น)
   // =========================
+  static const String _mascotAsset = 'assets/images/jitdee_mascot.png';
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final answered = _answeredCount;
     final total = _questions.length;
 
     return WillPopScope(
-      onWillPop: () async {
-        final ok = await _confirmExitIfDirty();
-        return ok;
-      },
+      onWillPop: () async => await _confirmExitIfDirty(),
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
           title: const Text('แบบสอบถามเชิงลึก (TMHI-55)'),
-          backgroundColor: Colors.orange,
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: Colors.black.withOpacity(0.82),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () async {
+              final ok = await _confirmExitIfDirty();
+              if (ok && mounted) Navigator.pop(context);
+            },
+          ),
           actions: [
-            TextButton.icon(
-              onPressed: _saving ? null : _saveAndExit,
-              icon: const Icon(Icons.save_alt, color: Colors.white),
-              label: const Text(
-                'บันทึกแล้วกลับ',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: TextButton.icon(
+                onPressed: _saving ? null : _saveAndExit,
+                style: TextButton.styleFrom(
+                  backgroundColor: cs.primary.withOpacity(0.10),
+                  foregroundColor: cs.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                icon: const Icon(Icons.save_alt),
+                label: const Text(
+                  'บันทึกแล้วกลับ',
+                  style: TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
             ),
-            const SizedBox(width: 6),
           ],
         ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.orange.withOpacity(0.25)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'กรุณาตอบตามความรู้สึกของคุณในช่วงที่ผ่านมา',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text('ให้คะแนน 0–3'),
-                      const Text(
-                        '0 = ไม่เลย • 1 = เล็กน้อย • 2 = มาก • 3 = มากที่สุด',
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.check_circle, size: 16),
-                          const SizedBox(width: 6),
-                          Text('ตอบแล้ว $answered / $total ข้อ'),
-                          const Spacer(),
-                          if (answered > 0)
-                            Text(
-                              'Draft: ON',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: Colors.orange.shade800,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
+
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                cs.secondary.withOpacity(0.25),
+                cs.primary.withOpacity(0.12),
+                Colors.white,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+                  child: _introCard(context, answered, total),
+                ),
+
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 104),
+                    itemCount: _questions.length,
+                    itemBuilder: (context, i) {
+                      final qNo = i + 1;
+                      final selected = _answers[i];
+
+                      return _questionCard(
+                        context: context,
+                        index: i,
+                        qNo: qNo,
+                        title: _questions[i],
+                        selected: selected,
+                      );
+                    },
                   ),
                 ),
-              ),
-
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-                  itemCount: _questions.length,
-                  itemBuilder: (context, i) {
-                    final qNo = i + 1;
-                    final selected = _answers[i];
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: Colors.black.withOpacity(0.06)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  'ข้อที่ $qNo',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const Spacer(),
-                                if (selected >= 0)
-                                  Icon(
-                                    Icons.check_circle,
-                                    color: Colors.green.shade600,
-                                    size: 18,
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(_questions[i]),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 10,
-                              children: List.generate(4, (v) {
-                                final isOn = selected == v;
-                                return ChoiceChip(
-                                  label: Text('$v'),
-                                  selected: isOn,
-                                  onSelected: (_) {
-                                    setState(() => _answers[i] = v);
-                                    _scheduleAutoSave(touchedIndex: i);
-                                  },
-                                  selectedColor: Colors.orange.withOpacity(
-                                    0.25,
-                                  ),
-                                );
-                              }),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
 
         bottomNavigationBar: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: _canSubmit ? _submit : null,
-                child: _saving
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : Text('ส่งคำตอบ ($answered/$total)'),
-              ),
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+            child: _submitBar(context, answered, total),
           ),
         ),
       ),
     );
   }
 
+  Widget _introCard(BuildContext context, int answered, int total) {
+  final cs = Theme.of(context).colorScheme;
+  final progress = total == 0 ? 0.0 : answered / total;
+
+  return Container(
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      color: Colors.white.withOpacity(0.88),
+      border: Border.all(color: Colors.black.withOpacity(0.05)),
+      boxShadow: [
+        BoxShadow(
+          blurRadius: 14,
+          offset: const Offset(0, 8),
+          color: Colors.black.withOpacity(0.05),
+        ),
+      ],
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // mascot small
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: cs.primary.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.asset(_mascotAsset, fit: BoxFit.contain),
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "ตอบแล้ว $answered / $total ข้อ",
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14.5,
+                  color: Colors.black.withOpacity(0.82),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 8,
+                  backgroundColor: Colors.black.withOpacity(0.06),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    cs.primary.withOpacity(0.85),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+
+        // right actions
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Draft pill (ถ้าตอบแล้ว)
+            if (answered > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00B894).withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: const Color(0xFF00B894).withOpacity(0.20),
+                  ),
+                ),
+                child: const Text(
+                  "Draft: ON",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    color: Color(0xFF00B894),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
+
+            // Help button (ดูคำอธิบาย 0–3)
+            InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  builder: (_) => Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          "วิธีให้คะแนน 0–3",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                        ),
+                        SizedBox(height: 10),
+                        Text("0 = ไม่เลย"),
+                        Text("1 = เล็กน้อย"),
+                        Text("2 = มาก"),
+                        Text("3 = มากที่สุด"),
+                        SizedBox(height: 10),
+                        Text(
+                          "ตอบตามความรู้สึกของคุณในช่วงที่ผ่านมา",
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: cs.primary.withOpacity(0.18)),
+                ),
+                child: Icon(Icons.help_outline, color: cs.primary, size: 18),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _questionCard({
+    required BuildContext context,
+    required int index,
+    required int qNo,
+    required String title,
+    required int selected,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: Colors.white.withOpacity(0.92),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.06),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "$qNo",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: cs.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.8,
+                    height: 1.35,
+                    color: Colors.black.withOpacity(0.82),
+                  ),
+                ),
+              ),
+              if (selected >= 0)
+                Icon(
+                  Icons.check_circle,
+                  color: const Color(0xFF00B894).withOpacity(0.90),
+                  size: 18,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: List.generate(4, (v) {
+              final isOn = selected == v;
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: _saving
+                    ? null
+                    : () {
+                        setState(() => _answers[index] = v);
+                        _scheduleAutoSave(touchedIndex: index);
+                      },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: isOn
+                        ? cs.primary.withOpacity(0.14)
+                        : Colors.black.withOpacity(0.03),
+                    border: Border.all(
+                      color: isOn
+                          ? cs.primary.withOpacity(0.35)
+                          : Colors.black.withOpacity(0.08),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isOn) ...[
+                        Icon(Icons.check, size: 16, color: cs.primary),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        "$v",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: isOn ? cs.primary : Colors.black.withOpacity(0.72),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _submitBar(BuildContext context, int answered, int total) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 54,
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          padding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+        ),
+        onPressed: _canSubmit ? _submit : null, // ✅ logic เดิม
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: _canSubmit
+                ? LinearGradient(
+                    colors: [
+                      cs.primary.withOpacity(0.95),
+                      cs.secondary.withOpacity(0.95),
+                    ],
+                  )
+                : LinearGradient(
+                    colors: [
+                      Colors.black.withOpacity(0.15),
+                      Colors.black.withOpacity(0.10),
+                    ],
+                  ),
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Center(
+            child: _saving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : Text(
+                    "ส่งคำตอบ ($answered/$total)",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pill({
+    required Color color,
+    required Color border,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: child,
+    );
+  }
+
   // =========================
-  // Scoring
+  // Scoring (เดิม)
   // =========================
 
   int _calculateScore() {
@@ -483,7 +725,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       final ans = _answers[i]; // 0..3
       final base = ans + 1; // 1..4
 
-      // กลุ่ม 2 กลับคะแนน: 1..4 => 4..1
       final isReverse = _reverseItems.contains(qNo);
       final score = isReverse ? (5 - base) : base;
 
@@ -493,7 +734,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   }
 
   ({String level, String label, Color color}) _interpret(int score) {
-    // 179–220 Good, 158–178 Fair, <=157 Poor
     if (score >= 179) {
       return (level: 'green', label: 'Good (ดี)', color: Colors.green);
     }
@@ -504,7 +744,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   }
 
   // =========================
-  // Submit
+  // Submit (เดิม)
   // =========================
 
   Future<void> _submit() async {
@@ -523,14 +763,12 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         deepScore: score,
       );
 
-      // 🔶 ถ้า Deep เป็นเหลือง → schedule reminder (เทส 1 นาที)
       if (result.level == 'yellow') {
         NotificationService.instance.scheduleDeepReminderTest(
           uid: widget.user.uid,
         );
       }
 
-      // ✅ ส่งจริงแล้ว → เคลียร์ draft
       await _fs.clearDeepDraft(widget.user.uid);
 
       if (!mounted) return;
@@ -586,7 +824,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
 
       if (!mounted) return;
 
-      // ✅ Flow หลังส่ง
       if (result.level == 'red') {
         Navigator.pushReplacement(
           context,
@@ -599,9 +836,8 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('ส่งคำตอบไม่สำเร็จ: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('ส่งคำตอบไม่สำเร็จ: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

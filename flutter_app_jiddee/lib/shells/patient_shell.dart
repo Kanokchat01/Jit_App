@@ -60,20 +60,49 @@ class _PatientShellState extends State<PatientShell> {
       final title = (data['title'] ?? 'แจ้งเตือน').toString();
       final body = (data['body'] ?? '').toString();
 
-      // กันเด้งซ้อน (กรณี snapshot มาซ้ำเร็ว ๆ)
       if (_dialogShowing) return;
       _dialogShowing = true;
 
-      // โชว์ popup
+      final cs = Theme.of(context).colorScheme;
+
       await showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          title: Text(title),
-          content: Text(body),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.notifications_none, color: cs.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            body,
+            style: TextStyle(height: 1.35, color: Colors.black.withOpacity(0.70)),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('ตกลง'),
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('ตกลง'),
+              ),
             ),
           ],
         ),
@@ -81,7 +110,6 @@ class _PatientShellState extends State<PatientShell> {
 
       _dialogShowing = false;
 
-      // mark read กันเด้งซ้ำ
       try {
         await doc.reference.update({'read': true});
       } catch (_) {
@@ -92,27 +120,164 @@ class _PatientShellState extends State<PatientShell> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return StreamBuilder<AppUser>(
       stream: FirestoreService().watchUser(widget.user.uid),
       builder: (context, snap) {
+        // ✅ Loading (UI นุ่มขึ้น แต่ logic เดิม)
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            body: _DecorBackground(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 22,
+                        offset: const Offset(0, 12),
+                        color: Colors.black.withOpacity(0.06),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: cs.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'กำลังโหลดข้อมูลผู้ใช้...',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black.withOpacity(0.70),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
         }
 
+        // ✅ Not found (UI นุ่มขึ้น แต่ logic เดิม)
         if (!snap.hasData) {
-          return const Scaffold(
-            body: Center(child: Text('ไม่พบข้อมูลผู้ใช้')),
+          return Scaffold(
+            body: _DecorBackground(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  margin: const EdgeInsets.symmetric(horizontal: 22),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 22,
+                        offset: const Offset(0, 12),
+                        color: Colors.black.withOpacity(0.06),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_off_outlined, size: 42, color: cs.primary),
+                      const SizedBox(height: 10),
+                      Text(
+                        'ไม่พบข้อมูลผู้ใช้',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black.withOpacity(0.75),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'กรุณาลองเข้าสู่ระบบใหม่ หรือแจ้งผู้ดูแลระบบ',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          height: 1.35,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
         }
 
         final liveUser = snap.data!;
 
+        // ✅ หน้าหลัก: ไม่เปลี่ยนฟังก์ชัน แค่ใส่ฉากหลัง + safe area
         return Scaffold(
-          body: DashboardHome(user: liveUser),
+          body: _DecorBackground(
+            child: SafeArea(
+              child: DashboardHome(user: liveUser),
+            ),
+          ),
         );
       },
+    );
+  }
+}
+
+/// ✅ Background ตกแต่ง (เหมือน Login/Register) — ไม่มีผลกับ logic
+class _DecorBackground extends StatelessWidget {
+  final Widget child;
+  const _DecorBackground({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                cs.primary.withOpacity(0.10),
+                cs.secondary.withOpacity(0.12),
+                Theme.of(context).scaffoldBackgroundColor,
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          top: -90,
+          left: -70,
+          child: _softBlob(cs.primary.withOpacity(0.18), 220),
+        ),
+        Positioned(
+          bottom: -110,
+          right: -90,
+          child: _softBlob(cs.secondary.withOpacity(0.22), 260),
+        ),
+        child,
+      ],
+    );
+  }
+
+  Widget _softBlob(Color color, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

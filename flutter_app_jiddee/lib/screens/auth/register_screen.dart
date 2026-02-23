@@ -62,139 +62,335 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _openPrivacyPolicy() async {
     if (!await launchUrl(privacyUrl, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ไม่สามารถเปิดลิงก์ได้')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่สามารถเปิดลิงก์ได้')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.blue.shade700;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('สมัครสมาชิก'),
-        backgroundColor: primaryColor,
-      ),
-      backgroundColor: Colors.blue.shade50,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            TextField(
-              controller: name,
-              decoration: _input('ชื่อผู้ใช้', Icons.person),
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _input('Email', Icons.email),
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: pass,
-              obscureText: true,
-              decoration: _input('Password (min 6 characters)', Icons.lock),
-            ),
-            const SizedBox(height: 12),
-
-            // 🔥 เบอร์ 10 หลัก
-            TextField(
-              controller: phone,
-              keyboardType: TextInputType.number,
-              maxLength: 10,
-              decoration: _input('เบอร์โทรศัพท์ (10 หลัก)', Icons.phone),
-            ),
-            const SizedBox(height: 12),
-
-            // 🔥 วันเกิดเลือกจากปฏิทิน
-            TextField(
-              controller: birthDate,
-              readOnly: true,
-              onTap: _pickDate,
-              decoration: _input('วันเกิด (เลือกจากปฏิทิน)', Icons.cake),
-            ),
-            const SizedBox(height: 12),
-
-            // 🔥 เพศ
-            DropdownButtonFormField<String>(
-              value: gender,
-              decoration: const InputDecoration(
-                labelText: 'เพศ',
-                prefixIcon: Icon(Icons.wc),
-                border: OutlineInputBorder(),
+      body: Stack(
+        children: [
+          // ✅ Background ละมุนๆ
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  cs.primary.withOpacity(0.10),
+                  cs.secondary.withOpacity(0.12),
+                  Theme.of(context).scaffoldBackgroundColor,
+                ],
               ),
-              items: const [
-                DropdownMenuItem(value: 'male', child: Text('ชาย')),
-                DropdownMenuItem(value: 'female', child: Text('หญิง')),
-                DropdownMenuItem(value: 'other', child: Text('อื่นๆ')),
-              ],
-              onChanged: (v) => setState(() => gender = v),
+            ),
+          ),
+          Positioned(
+            top: -90,
+            left: -70,
+            child: _softBlob(cs.primary.withOpacity(0.18), 220),
+          ),
+          Positioned(
+            bottom: -110,
+            right: -90,
+            child: _softBlob(cs.secondary.withOpacity(0.22), 260),
+          ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // ✅ AppBar แบบโปร: โปร่งใส ไม่แข็ง
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'สมัครสมาชิก',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black.withOpacity(0.78),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 48), // balance space for center title
+                    ],
+                  ),
+                ),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(22, 10, 22, 22),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 6),
+
+                          // ✅ Header
+                          Row(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.85),
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      blurRadius: 20,
+                                      color: Colors.black.withOpacity(0.06),
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(8),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'เริ่มต้นใช้งาน JitDee',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.black.withOpacity(0.78),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'กรอกข้อมูลพื้นฐานให้ครบ เพื่อสร้างโปรไฟล์ผู้ใช้งาน',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        height: 1.35,
+                                        color: Colors.black.withOpacity(0.55),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // ✅ Form Card (Premium)
+Card(
+  elevation: 0,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(24),
+  ),
+  child: Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: [
+        BoxShadow(
+          blurRadius: 30,
+          offset: const Offset(0, 18),
+          color: Colors.black.withOpacity(0.06),
+        ),
+      ],
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ===== Section: Account =====
+          Text(
+            'ข้อมูลบัญชี',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: name,
+            decoration: _input('ชื่อผู้ใช้', Icons.person_outline),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: email,
+            keyboardType: TextInputType.emailAddress,
+            decoration: _input('Email', Icons.email_outlined),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: pass,
+            obscureText: true,
+            decoration: _input('Password (min 6 characters)', Icons.lock_outline),
+          ),
+
+          const SizedBox(height: 16),
+          Divider(height: 1, color: Colors.black12),
+          const SizedBox(height: 16),
+
+          // ===== Section: Personal =====
+          Text(
+            'ข้อมูลส่วนตัว',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: phone,
+            keyboardType: TextInputType.number,
+            maxLength: 10,
+            decoration: _input('เบอร์โทรศัพท์ (10 หลัก)', Icons.phone_outlined),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: birthDate,
+            readOnly: true,
+            onTap: _pickDate,
+            decoration: _input('วันเกิด (เลือกจากปฏิทิน)', Icons.cake_outlined),
+          ),
+          const SizedBox(height: 12),
+
+          DropdownButtonFormField<String>(
+            value: gender,
+            decoration: _input('เพศ', Icons.wc).copyWith(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'male', child: Text('ชาย')),
+              DropdownMenuItem(value: 'female', child: Text('หญิง')),
+              DropdownMenuItem(value: 'other', child: Text('อื่นๆ')),
+            ],
+            onChanged: (v) => setState(() => gender = v),
+          ),
+
+          const SizedBox(height: 16),
+          Divider(height: 1, color: Colors.black12),
+          const SizedBox(height: 16),
+
+          // ===== Section: Education =====
+          Text(
+            'ข้อมูลการศึกษา',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: faculty,
+            decoration: _input('คณะ', Icons.school_outlined),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: major,
+            decoration: _input('สาขา', Icons.menu_book_outlined),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: studentId,
+            keyboardType: TextInputType.number,
+            maxLength: 13,
+            decoration: _input('รหัสนักศึกษาไม่มี- (13 หลัก)', Icons.badge_outlined),
+          ),
+          const SizedBox(height: 12),
+
+          TextField(
+            controller: year,
+            keyboardType: TextInputType.number,
+            decoration: _input('ชั้นปี', Icons.calendar_month_outlined),
+          ),
+
+          const SizedBox(height: 14),
+
+          if (error != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B).withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                error!,
+                style: TextStyle(
+                  color: const Color(0xFFFF6B6B).withOpacity(0.95),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
+          ],
 
-            TextField(
-              controller: faculty,
-              decoration: _input('คณะ', Icons.school),
+          // ✅ Consent
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.65),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withOpacity(0.06)),
             ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: major,
-              decoration: _input('สาขา', Icons.menu_book),
-            ),
-            const SizedBox(height: 12),
-
-            // 🔥 รหัสนักศึกษา 13 หลัก
-            TextField(
-              controller: studentId,
-              keyboardType: TextInputType.number,
-              maxLength: 13,
-              decoration: _input('รหัสนักศึกษาไม่มี- (13 หลัก)', Icons.badge),
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: year,
-              keyboardType: TextInputType.number,
-              decoration: _input('ชั้นปี', Icons.calendar_today),
-            ),
-            const SizedBox(height: 16),
-
-            if (error != null)
-              Text(error!, style: const TextStyle(color: Colors.red)),
-
-            const SizedBox(height: 12),
-
-            Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Checkbox(
                   value: acceptedPolicy,
                   onChanged: (value) {
-                    setState(() {
-                      acceptedPolicy = value ?? false;
-                    });
+                    setState(() => acceptedPolicy = value ?? false);
                   },
                 ),
                 Expanded(
                   child: Wrap(
                     children: [
-                      const Text(
+                      Text(
                         'ฉันยินยอมให้แอปบันทึกและประมวลผลข้อมูลส่วนบุคคลตาม ',
+                        style: TextStyle(
+                          color: Colors.black.withOpacity(0.62),
+                          height: 1.35,
+                        ),
                       ),
                       GestureDetector(
                         onTap: _openPrivacyPolicy,
-                        child: const Text(
+                        child: Text(
                           'นโยบายคุ้มครองข้อมูลส่วนบุคคล',
                           style: TextStyle(
                             decoration: TextDecoration.underline,
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w600,
+                            color: cs.primary,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
                           ),
                         ),
                       ),
@@ -203,35 +399,74 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ],
             ),
+          ),
 
-            const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: (loading || !acceptedPolicy) ? null : _register,
-                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-                child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('สมัครสมาชิก'),
-              ),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: (loading || !acceptedPolicy) ? null : _register,
+              child: loading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.4,
+                      ),
+                    )
+                  : const Text('สมัครสมาชิก'),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+
+                          const SizedBox(height: 14),
+
+                          Text(
+                            'เมื่อสมัครสมาชิกแล้ว ระบบจะส่งลิงก์ยืนยันอีเมลให้\nกรุณายืนยันก่อนเข้าสู่ระบบ',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.35,
+                              color: Colors.black.withOpacity(0.45),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Widget _softBlob(Color color, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
   InputDecoration _input(String label, IconData icon) {
+    // ✅ ปล่อย filled/fillColor/border ให้ Theme คุมเป็นหลัก
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
+
+  // ------------------ logic เดิม (ไม่แตะ) ------------------
 
   Future<void> _register() async {
     if (email.text.isEmpty ||
@@ -263,26 +498,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       await cred.user!.sendEmailVerification();
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(cred.user!.uid)
-          .set({
-            'uid': cred.user!.uid,
-            'name': name.text.trim(),
-            'email': email.text.trim(),
-            'role': 'patient',
-            'consentCamera': false,
-            'phone': phone.text.trim(),
-            'birthDate': birthDate.text.trim(),
-            'gender': gender,
-            'faculty': faculty.text.trim(),
-            'major': major.text.trim(),
-            'studentId': studentId.text.trim(),
-            'year': year.text.trim(),
-            'hasCompletedPhq9': false,
-            'hasCompletedDeepAssessment': false,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+      await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
+        'uid': cred.user!.uid,
+        'name': name.text.trim(),
+        'email': email.text.trim(),
+        'role': 'patient',
+        'consentCamera': false,
+        'phone': phone.text.trim(),
+        'birthDate': birthDate.text.trim(),
+        'gender': gender,
+        'faculty': faculty.text.trim(),
+        'major': major.text.trim(),
+        'studentId': studentId.text.trim(),
+        'year': year.text.trim(),
+        'hasCompletedPhq9': false,
+        'hasCompletedDeepAssessment': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       if (!mounted) return;
 

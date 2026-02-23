@@ -7,175 +7,367 @@ class AdminNewsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pink = Colors.pink.shade300;
+    // ธีมสีให้ใกล้เคียง JitDee (มิ้นท์)
+    final mint = const Color(0xFF35CDB8);
+    final bg = const Color(0xFFF3FBFA);
 
     return Scaffold(
-      backgroundColor: Colors.pink.shade50,
-      appBar: AppBar(title: const Text("จัดการข่าวสาร"), backgroundColor: pink),
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          "จัดการข่าวสาร",
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        centerTitle: true,
+        foregroundColor: Colors.black.withOpacity(0.85),
+      ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: pink,
+        backgroundColor: mint,
+        elevation: 6,
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CreateNewsScreen()),
           );
         },
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('news')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final docs = snapshot.data!.docs;
-
-          if (docs.isEmpty) {
-            return const Center(child: Text("ยังไม่มีข่าว"));
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: docs.length,
-            itemBuilder: (_, i) {
-              final doc = docs[i];
-              final data = doc.data() as Map<String, dynamic>;
-
-              DateTime? createdAt;
-              if (data['createdAt'] is Timestamp) {
-                createdAt = (data['createdAt'] as Timestamp).toDate();
-              }
-
-              final formattedDate = createdAt != null
-                  ? DateFormat('dd MMM yyyy • HH:mm').format(createdAt)
-                  : '';
-
-              return Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+      body: Column(
+        children: [
+          // Header Card สวย ๆ
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: LinearGradient(
+                  colors: [
+                    mint.withOpacity(0.18),
+                    Colors.white.withOpacity(0.92),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                elevation: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        data['title'] ?? '',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                border: Border.all(color: Colors.black.withOpacity(0.05)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: mint.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: mint.withOpacity(0.22)),
+                    ),
+                    child: Icon(Icons.campaign_outlined, color: mint),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'News Management',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Colors.black.withOpacity(0.84),
+                          ),
                         ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'สร้าง • แก้ไข • ลบ ข่าวสารเพื่อผู้ใช้งาน',
+                          style: TextStyle(
+                            color: Colors.black.withOpacity(0.60),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: mint.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: mint.withOpacity(0.22)),
+                    ),
+                    child: Text(
+                      'ADMIN',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: mint,
+                        fontSize: 12,
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
 
-                      const SizedBox(height: 6),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('news')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return Center(
+                    child: CircularProgressIndicator(color: mint),
+                  );
+                }
 
-                      const SizedBox(height: 10),
+                final docs = snapshot.data!.docs;
 
-                      Text(
-                        data['content'] ?? '',
-                        style: TextStyle(color: Colors.grey.shade700),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // 🔥 เวลา + ปุ่มล่างโพสต์ (อยู่บรรทัดเดียวกัน)
-                      Row(
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 🕒 เวลาโพสต์ (ชิดซ้าย)
-                          if (formattedDate.isNotEmpty)
+                          Icon(Icons.inbox_outlined,
+                              size: 44, color: Colors.black.withOpacity(0.35)),
+                          const SizedBox(height: 10),
+                          Text(
+                            "ยังไม่มีข่าว",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: Colors.black.withOpacity(0.75),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "กดปุ่ม + เพื่อสร้างข่าวแรกของคุณ",
+                            style: TextStyle(color: Colors.black.withOpacity(0.55)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) {
+                    final doc = docs[i];
+                    final data = doc.data() as Map<String, dynamic>;
+
+                    DateTime? createdAt;
+                    if (data['createdAt'] is Timestamp) {
+                      createdAt = (data['createdAt'] as Timestamp).toDate();
+                    }
+
+                    final formattedDate = createdAt != null
+                        ? DateFormat('dd MMM yyyy • HH:mm').format(createdAt)
+                        : '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(22),
+                        color: Colors.white.withOpacity(0.94),
+                        border: Border.all(color: Colors.black.withOpacity(0.05)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 18,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title + badge
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.access_time,
-                                  size: 14,
-                                  color: Colors.grey.shade600,
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: mint.withOpacity(0.16),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: mint.withOpacity(0.22)),
+                                  ),
+                                  child: Icon(Icons.article_outlined, color: mint),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  formattedDate,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    (data['title'] ?? '').toString(),
+                                    style: TextStyle(
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black.withOpacity(0.86),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
 
-                          const Spacer(),
+                            const SizedBox(height: 10),
 
-                          // ✏️ Edit
-                          TextButton.icon(
-                            icon: const Icon(Icons.edit, size: 18),
-                            label: const Text("Edit"),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => EditNewsScreen(
-                                    docId: doc.id,
-                                    oldTitle: data['title'] ?? '',
-                                    oldContent: data['content'] ?? '',
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-
-                          const SizedBox(width: 8),
-
-                          // 🗑 Delete
-                          TextButton.icon(
-                            icon: const Icon(Icons.delete, size: 18),
-                            label: const Text("Delete"),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red,
+                            Text(
+                              (data['content'] ?? '').toString(),
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.68),
+                                height: 1.35,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            onPressed: () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (_) => AlertDialog(
-                                  title: const Text("ลบโพสต์"),
-                                  content: const Text(
-                                    "คุณแน่ใจหรือไม่ว่าต้องการลบโพสต์นี้",
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(context, false),
-                                      child: const Text("ยกเลิก"),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.pop(context, true),
-                                      child: const Text("ลบ"),
-                                    ),
-                                  ],
-                                ),
-                              );
 
-                              if (confirm == true) {
-                                await FirebaseFirestore.instance
-                                    .collection('news')
-                                    .doc(doc.id)
-                                    .delete();
-                              }
-                            },
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Container(height: 1, color: Colors.black.withOpacity(0.06)),
+                            const SizedBox(height: 10),
+
+                            // เวลา + ปุ่ม Edit/Delete
+                            Row(
+                              children: [
+                                if (formattedDate.isNotEmpty)
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.access_time,
+                                        size: 14,
+                                        color: Colors.black.withOpacity(0.45),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        formattedDate,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black.withOpacity(0.55),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                const Spacer(),
+
+                                _pillButton(
+                                  label: 'Edit',
+                                  icon: Icons.edit,
+                                  color: mint,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EditNewsScreen(
+                                          docId: doc.id,
+                                          oldTitle: data['title'] ?? '',
+                                          oldContent: data['content'] ?? '',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                _pillButton(
+                                  label: 'Delete',
+                                  icon: Icons.delete,
+                                  color: Colors.red,
+                                  onTap: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (_) => AlertDialog(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                        title: const Text(
+                                          "ลบโพสต์",
+                                          style: TextStyle(fontWeight: FontWeight.w900),
+                                        ),
+                                        content: const Text(
+                                          "คุณแน่ใจหรือไม่ว่าต้องการลบโพสต์นี้",
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, false),
+                                            child: const Text("ยกเลิก"),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(14),
+                                              ),
+                                            ),
+                                            onPressed: () => Navigator.pop(context, true),
+                                            child: const Text("ลบ"),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirm == true) {
+                                      await FirebaseFirestore.instance
+                                          .collection('news')
+                                          .doc(doc.id)
+                                          .delete();
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ปุ่มทรง pill ใช้ซ้ำ
+  static Widget _pillButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withOpacity(0.26)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(fontWeight: FontWeight.w900, color: color),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -210,46 +402,123 @@ class _CreateNewsScreenState extends State<CreateNewsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pink = Colors.pink.shade300;
+    final mint = const Color(0xFF35CDB8);
+    final bg = const Color(0xFFF3FBFA);
 
     return Scaffold(
-      backgroundColor: Colors.pink.shade50,
-      appBar: AppBar(title: const Text("สร้างข่าว"), backgroundColor: pink),
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black.withOpacity(0.85),
+        title: const Text(
+          "สร้างข่าว",
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        centerTitle: true,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: Column(
           children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(
-                labelText: 'หัวข้อข่าว',
-                border: OutlineInputBorder(),
+            _formCard(
+              mint: mint,
+              child: Column(
+                children: [
+                  _prettyTextField(
+                    controller: title,
+                    label: 'หัวข้อข่าว',
+                    icon: Icons.title,
+                    mint: mint,
+                  ),
+                  const SizedBox(height: 14),
+                  _prettyTextField(
+                    controller: content,
+                    label: 'เนื้อหา',
+                    icon: Icons.article_outlined,
+                    mint: mint,
+                    maxLines: 6,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: content,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: 'เนื้อหา',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 24),
+            const Spacer(),
             SizedBox(
               width: double.infinity,
+              height: 52,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: pink,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: mint,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 onPressed: loading ? null : _save,
                 child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("โพสต์ข่าว"),
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : const Text(
+                        "โพสต์ข่าว",
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _formCard({required Color mint, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        color: Colors.white.withOpacity(0.94),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  static Widget _prettyTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required Color mint,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: mint.withOpacity(0.06),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: mint.withOpacity(0.40), width: 1.2),
         ),
       ),
     );
@@ -301,43 +570,73 @@ class _EditNewsScreenState extends State<EditNewsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pink = Colors.pink.shade300;
+    final mint = const Color(0xFF35CDB8);
+    final bg = const Color(0xFFF3FBFA);
 
     return Scaffold(
-      backgroundColor: Colors.pink.shade50,
-      appBar: AppBar(title: const Text("แก้ไขข่าว"), backgroundColor: pink),
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black.withOpacity(0.85),
+        title: const Text(
+          "แก้ไขข่าว",
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        centerTitle: true,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: Column(
           children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(
-                labelText: 'หัวข้อข่าว',
-                border: OutlineInputBorder(),
+            _CreateNewsScreenState._formCard(
+              mint: mint,
+              child: Column(
+                children: [
+                  _CreateNewsScreenState._prettyTextField(
+                    controller: title,
+                    label: 'หัวข้อข่าว',
+                    icon: Icons.title,
+                    mint: mint,
+                  ),
+                  const SizedBox(height: 14),
+                  _CreateNewsScreenState._prettyTextField(
+                    controller: content,
+                    label: 'เนื้อหา',
+                    icon: Icons.article_outlined,
+                    mint: mint,
+                    maxLines: 6,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: content,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: 'เนื้อหา',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 24),
+            const Spacer(),
             SizedBox(
               width: double.infinity,
+              height: 52,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: pink,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: mint,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 onPressed: loading ? null : _update,
                 child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("บันทึกการแก้ไข"),
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : const Text(
+                        "บันทึกการแก้ไข",
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
               ),
             ),
           ],

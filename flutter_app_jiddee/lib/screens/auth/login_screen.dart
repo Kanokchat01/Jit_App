@@ -25,142 +25,250 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.blue.shade700;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.blue.shade50,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Column(
-                children: [
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(32),
-                      boxShadow: [
-                        BoxShadow(
-                          blurRadius: 25,
-                          color: Colors.black.withOpacity(.08),
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(32),
-                      child: Image.asset(
-                        'assets/images/logo.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'JitDee',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: primaryColor,
-                    ),
-                  ),
+      body: Stack(
+        children: [
+          // ✅ Background (ละมุน + มีวงกลมเบาๆ)
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  cs.primary.withOpacity(0.10),
+                  cs.secondary.withOpacity(0.12),
+                  Theme.of(context).scaffoldBackgroundColor,
                 ],
               ),
-              const SizedBox(height: 24),
-
-              Text(
-                'Clinic Login',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: primaryColor,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Email
-              TextField(
-                controller: email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _input('Email', Icons.email),
-              ),
-              const SizedBox(height: 12),
-
-              // Password
-              TextField(
-                controller: pass,
-                obscureText: true,
-                decoration: _input('Password', Icons.lock),
-              ),
-              const SizedBox(height: 16),
-
-              if (error != null) ...[
-                Text(error!, style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 8),
-              ],
-
-              // Continue
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: loading ? null : _loginOrRegister,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: loading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Continue', style: TextStyle(fontSize: 18)),
-                ),
-              ),
-
-              // ✅ Forgot Password
-              const SizedBox(height: 6),
-              TextButton(
-                onPressed: loading ? null : _forgotPassword,
-                child: const Text('ลืมรหัสผ่าน?'),
-              ),
-
-              // สมัครสมาชิก
-              const SizedBox(height: 6),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                  );
-                },
-                child: const Text('สมัครสมาชิก'),
-              ),
-
-              const SizedBox(height: 16),
-              const Text(
-                'หมายเหตุ: สมัครใหม่ระบบจะตั้ง role เป็น patient อัตโนมัติ\n(ปรับเป็น clinician/admin ได้ใน Firestore)',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            top: -90,
+            left: -70,
+            child: _softBlob(cs.primary.withOpacity(0.18), 220),
+          ),
+          Positioned(
+            bottom: -110,
+            right: -90,
+            child: _softBlob(cs.secondary.withOpacity(0.22), 260),
+          ),
+
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 6),
+
+                      // ✅ Header (Logo + Title)
+                      Column(
+                        children: [
+                          Container(
+                            width: 110,
+                            height: 110,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.85),
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: [
+                                BoxShadow(
+                                  blurRadius: 24,
+                                  color: Colors.black.withOpacity(0.06),
+                                  offset: const Offset(0, 12),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(22),
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'JitDee',
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              color: cs.primary,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Clinic Login',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black.withOpacity(0.78),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'ยินดีต้อนรับ\nเข้าสู่ระบบเพื่อประเมินและติดตามสุขภาพใจ',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.35,
+                              color: Colors.black.withOpacity(0.55),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // ✅ Card Form
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'เข้าสู่ระบบ',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black.withOpacity(0.78),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              TextField(
+                                controller: email,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: _input('Email', Icons.email_outlined),
+                              ),
+                              const SizedBox(height: 12),
+
+                              TextField(
+                                controller: pass,
+                                obscureText: true,
+                                decoration: _input('Password', Icons.lock_outline),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              if (error != null) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF6B6B).withOpacity(0.10),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Text(
+                                    error!,
+                                    style: TextStyle(
+                                      color: const Color(0xFFFF6B6B).withOpacity(0.95),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+
+                              SizedBox(
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: loading ? null : _loginOrRegister,
+                                  child: loading
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.4,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text('Continue'),
+                                ),
+                              ),
+
+                              const SizedBox(height: 10),
+
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  TextButton(
+                                    onPressed: loading ? null : _forgotPassword,
+                                    child: const Text('ลืมรหัสผ่าน?'),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text('•'),
+                                  const SizedBox(width: 6),
+                                  TextButton(
+                                    onPressed: loading
+                                        ? null
+                                        : () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => const RegisterScreen(),
+                                              ),
+                                            );
+                                          },
+                                    child: const Text('สมัครสมาชิก'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // ✅ Note
+                      Text(
+                        'หมายเหตุ: สมัครใหม่ระบบจะตั้ง role เป็น patient อัตโนมัติ\n(ปรับเป็น clinician/admin ได้ใน Firestore)',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: Colors.black.withOpacity(0.45),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _softBlob(Color color, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
       ),
     );
   }
 
   InputDecoration _input(String label, IconData icon) {
+    // ✅ ใช้ theme เป็นหลัก → ไม่ต้อง hardcode สี/กรอบเยอะ
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      // ปล่อย filled/fillColor/border ให้ Theme คุม
     );
   }
+
+  // ------------------ logic เดิม (ไม่แตะ) ------------------
 
   Future<void> _loginOrRegister() async {
     setState(() {

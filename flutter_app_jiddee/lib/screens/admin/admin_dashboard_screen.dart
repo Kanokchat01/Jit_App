@@ -53,8 +53,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     final androidPlugin = _local
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
+            AndroidFlutterLocalNotificationsPlugin>();
 
     await androidPlugin?.createNotificationChannel(channel);
   }
@@ -67,38 +66,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         .collection('admin_notifications')
         .snapshots()
         .listen((snapshot) {
-          for (final doc in snapshot.docs) {
-            if (!_shownIds.contains(doc.id)) {
-              _shownIds.add(doc.id);
+      for (final doc in snapshot.docs) {
+        if (!_shownIds.contains(doc.id)) {
+          _shownIds.add(doc.id);
 
-              final data = doc.data();
+          final data = doc.data();
 
-              _local.show(
-                DateTime.now().millisecondsSinceEpoch.remainder(100000),
-                data['title'] ?? 'แจ้งเตือน',
-                data['body'] ?? '',
-                const NotificationDetails(
-                  android: AndroidNotificationDetails(
-                    _channelId,
-                    _channelName,
-                    importance: Importance.max,
-                    priority: Priority.high,
-                  ),
-                ),
-              );
-            }
-          }
-        });
+          _local.show(
+            DateTime.now().millisecondsSinceEpoch.remainder(100000),
+            data['title'] ?? 'แจ้งเตือน',
+            data['body'] ?? '',
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channelId,
+                _channelName,
+                importance: Importance.max,
+                priority: Priority.high,
+              ),
+            ),
+          );
+        }
+      }
+    });
   }
 
   // ===============================
-  // BUILD
+  // BUILD (UI ปรับใหม่: ไม่แตะ logic)
   // ===============================
   @override
   Widget build(BuildContext context) {
-    final usersStream = FirebaseFirestore.instance
-        .collection('users')
-        .snapshots();
+    final cs = Theme.of(context).colorScheme;
+
+    final usersStream = FirebaseFirestore.instance.collection('users').snapshots();
 
     final pendingApptStream = FirebaseFirestore.instance
         .collection('appointments')
@@ -106,103 +105,140 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         .snapshots();
 
     return Scaffold(
-      // ❌ ไม่มี AppBar
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: StreamBuilder<QuerySnapshot>(
-            stream: usersStream,
-            builder: (context, snap) {
-              if (!snap.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
+      extendBodyBehindAppBar: true,
 
-              final docs = snap.data!.docs;
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              cs.secondary.withOpacity(0.22),
+              cs.primary.withOpacity(0.10),
+              Colors.white,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: usersStream,
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-              final patients = docs
-                  .map(
-                    (d) =>
-                        AppUser.fromMap(d.id, d.data() as Map<String, dynamic>),
-                  )
-                  .where((u) => u.role.name.toLowerCase() == 'patient')
-                  .toList();
+                final docs = snap.data!.docs;
 
-              final phqRed = patients
-                  .where((u) => (u.phq9RiskLevel ?? '').toLowerCase() == 'red')
-                  .length;
+                final patients = docs
+                    .map((d) =>
+                        AppUser.fromMap(d.id, d.data() as Map<String, dynamic>))
+                    .where((u) => u.role.name.toLowerCase() == 'patient')
+                    .toList();
 
-              final deepRed = patients
-                  .where((u) => (u.deepRiskLevel ?? '').toLowerCase() == 'red')
-                  .length;
+                final phqRed = patients
+                    .where(
+                      (u) => (u.phq9RiskLevel ?? '').toLowerCase() == 'red',
+                    )
+                    .length;
 
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          title: 'ผู้ป่วยทั้งหมด',
-                          value: '${patients.length}',
-                          icon: Icons.people,
-                        ),
+                final deepRed = patients
+                    .where(
+                      (u) => (u.deepRiskLevel ?? '').toLowerCase() == 'red',
+                    )
+                    .length;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+
+                    Text(
+                      "ภาพรวมระบบ",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black.withOpacity(0.65),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatCard(
-                          title: 'PHQ-9 แดง',
-                          value: '$phqRed',
-                          icon: Icons.warning,
-                          color: Colors.red,
-                        ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Expanded(
+                      child: GridView.count(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 1.10,
+                        children: [
+                          _StatCard(
+                            title: 'ผู้ป่วยทั้งหมด',
+                            value: '${patients.length}',
+                            icon: Icons.people_rounded,
+                            color: const Color(0xFF4DA3FF),
+                          ),
+                          _StatCard(
+                            title: 'PHQ-9 แดง',
+                            value: '$phqRed',
+                            icon: Icons.warning_rounded,
+                            color: const Color(0xFFFF5E5E),
+                          ),
+                          _StatCard(
+                            title: 'Deep แดง',
+                            value: '$deepRed',
+                            icon: Icons.local_hospital_rounded,
+                            color: const Color(0xFFFF8A65),
+                          ),
+                          StreamBuilder<QuerySnapshot>(
+                            stream: pendingApptStream,
+                            builder: (context, apptSnap) {
+                              final pending = apptSnap.data?.docs.length ?? 0;
+                              return _StatCard(
+                                title: 'คิวนัด Pending',
+                                value: '$pending',
+                                icon: Icons.event_note_rounded,
+                                color: const Color(0xFFFFB74D),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          title: 'Deep แดง',
-                          value: '$deepRed',
-                          icon: Icons.local_hospital,
-                          color: Colors.red,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StreamBuilder<QuerySnapshot>(
-                          stream: pendingApptStream,
-                          builder: (context, apptSnap) {
-                            final pending = apptSnap.data?.docs.length ?? 0;
-                            return _StatCard(
-                              title: 'คิวนัด Pending',
-                              value: '$pending',
-                              icon: Icons.event_note,
-                              color: Colors.orange,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
 
-      // ✅ ปุ่มลอยแทนกระดิ่ง
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFFE75480),
-        onPressed: _openNotificationSheet,
-        child: const Icon(Icons.notifications),
+      // ✅ ปุ่มลอยแทนกระดิ่ง (ยังเรียกฟังก์ชันเดิม)
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [cs.primary, cs.secondary],
+          ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+              color: cs.primary.withOpacity(0.30),
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          onPressed: _openNotificationSheet,
+          child: const Icon(Icons.notifications, color: Colors.white),
+        ),
       ),
     );
   }
 
   // ===============================
-  // 🔔 BottomSheet
+  // 🔔 BottomSheet (เดิม)
   // ===============================
   void _openNotificationSheet() async {
     final unread = await FirebaseFirestore.instance
@@ -216,41 +252,94 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('admin_notifications')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        final cs = Theme.of(context).colorScheme;
 
-            final docs = snapshot.data!.docs;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 6),
+              const Text(
+                "การแจ้งเตือน (Admin)",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('admin_notifications')
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return Center(
+                        child: CircularProgressIndicator(color: cs.primary),
+                      );
+                    }
 
-            if (docs.isEmpty) {
-              return const Center(child: Text("ยังไม่มีแจ้งเตือน"));
-            }
+                    final docs = snapshot.data!.docs;
 
-            return ListView.builder(
-              itemCount: docs.length,
-              itemBuilder: (_, i) {
-                final data = docs[i].data() as Map<String, dynamic>;
-                return ListTile(
-                  leading: const Icon(Icons.notifications),
-                  title: Text(data['title'] ?? ''),
-                  subtitle: Text(data['body'] ?? ''),
-                );
-              },
-            );
-          },
+                    if (docs.isEmpty) {
+                      return const Center(child: Text("ยังไม่มีแจ้งเตือน"));
+                    }
+
+                    return ListView.builder(
+                      itemCount: docs.length,
+                      itemBuilder: (_, i) {
+                        final data = docs[i].data() as Map<String, dynamic>;
+                        final isRead = (data['read'] ?? false) == true;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.96),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.black.withOpacity(0.05),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                                color: Colors.black.withOpacity(0.05),
+                              ),
+                            ],
+                          ),
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.notifications_rounded,
+                              color: isRead ? Colors.black38 : cs.primary,
+                            ),
+                            title: Text(
+                              data['title'] ?? '',
+                              style: TextStyle(
+                                fontWeight:
+                                    isRead ? FontWeight.w600 : FontWeight.w900,
+                              ),
+                            ),
+                            subtitle: Text(data['body'] ?? ''),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 }
 
+// ===============================
+// ✅ Stat Card (UI ใหม่: ไม่แตะ logic)
 // ===============================
 class _StatCard extends StatelessWidget {
   final String title;
@@ -268,37 +357,47 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: color.withOpacity(0.08),
-        border: Border.all(color: color.withOpacity(0.22)),
+        borderRadius: BorderRadius.circular(26),
+        color: Colors.white.withOpacity(0.92),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 20,
+            offset: const Offset(0, 12),
+            color: Colors.black.withOpacity(0.06),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.14),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Icon(icon, color: color),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                  ),
-                ),
-              ],
+          const Spacer(),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Colors.black.withOpacity(0.65),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: color,
             ),
           ),
         ],

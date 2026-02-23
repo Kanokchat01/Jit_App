@@ -51,105 +51,177 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final stream = _fs.watchAppointmentsByStatus(status: statusFilter);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('คิวนัดหมายแพทย์'),
-      ),
-      body: Column(
-        children: [
-          _topFilters(),
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: stream,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return Center(child: Text('เกิดข้อผิดพลาด: ${snap.error}'));
-                }
-
-                final items = (snap.data ?? []);
-
-                // ✅ search filter (ชื่อ/uid)
-                final filtered = items.where((a) {
-                  if (_q.isEmpty) return true;
-                  final name = (a['patientName'] ?? '').toString().toLowerCase();
-                  final uid = (a['patientUid'] ?? '').toString().toLowerCase();
-                  return name.contains(_q) || uid.contains(_q);
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Text(
-                      _q.isEmpty ? 'ไม่มีรายการในสถานะนี้' : 'ไม่พบผลลัพธ์ที่ค้นหา',
-                      style: TextStyle(color: Colors.black.withOpacity(0.6)),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) => _apptCard(context, filtered[i]),
-                );
-              },
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              cs.primary.withOpacity(0.08),
+              cs.secondary.withOpacity(0.10),
+              Colors.white,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-        ],
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _topBar(context),
+              _topFiltersCard(context),
+              Expanded(
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: stream,
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(color: cs.primary),
+                      );
+                    }
+                    if (snap.hasError) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Text(
+                            'เกิดข้อผิดพลาด: ${snap.error}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.black.withOpacity(0.70)),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final items = (snap.data ?? []);
+
+                    // ✅ search filter (ชื่อ/uid)
+                    final filtered = items.where((a) {
+                      if (_q.isEmpty) return true;
+                      final name = (a['patientName'] ?? '').toString().toLowerCase();
+                      final uid = (a['patientUid'] ?? '').toString().toLowerCase();
+                      return name.contains(_q) || uid.contains(_q);
+                    }).toList();
+
+                    if (filtered.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(22),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.inbox_outlined,
+                                  size: 42, color: Colors.black.withOpacity(0.35)),
+                              const SizedBox(height: 10),
+                              Text(
+                                _q.isEmpty ? 'ไม่มีรายการในสถานะนี้' : 'ไม่พบผลลัพธ์ที่ค้นหา',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.black.withOpacity(0.70),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'ลองเปลี่ยนสถานะ หรือปรับคำค้นหาใหม่',
+                                style: TextStyle(color: Colors.black.withOpacity(0.55)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, i) => _apptCard(context, filtered[i]),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   // =========================
-  // UI: Top Filters + Search
+  // UI: Top Bar
   // =========================
-  Widget _topFilters() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.black.withOpacity(0.06)),
-        ),
-      ),
-      child: Column(
+  Widget _topBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Row(
         children: [
-          // Search
-          TextField(
-            controller: _searchCtrl,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'ค้นหา: ชื่อผู้ป่วย / patientUid',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _q.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() {});
-                      },
-                    ),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.92),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                    color: Colors.black.withOpacity(0.06),
+                  ),
+                ],
+              ),
+              child: Icon(Icons.arrow_back, color: Colors.black.withOpacity(0.75)),
             ),
           ),
-          const SizedBox(height: 10),
-
-          // Status chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Admin · JitDee',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black.withOpacity(0.82),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'คิวนัดหมายแพทย์',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: Colors.black.withOpacity(0.85),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: cs.primary.withOpacity(0.18)),
+            ),
             child: Row(
               children: [
-                _statusChip('รออนุมัติ', 'pending', tone: _Tone.orange),
-                _statusChip('อนุมัติ', 'approved', tone: _Tone.green),
-                _statusChip('ปฏิเสธ', 'rejected', tone: _Tone.red),
-                _statusChip('เสร็จสิ้น', 'completed', tone: _Tone.blueGrey),
-                _statusChip('ทั้งหมด', 'all', tone: _Tone.normal),
+                Icon(Icons.queue_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'Queue',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: cs.primary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -158,7 +230,87 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
     );
   }
 
+  // =========================
+  // UI: Top Filters + Search (card)
+  // =========================
+  Widget _topFiltersCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+              color: Colors.black.withOpacity(0.05),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Search
+            TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'ค้นหา: ชื่อผู้ป่วย / patientUid',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _q.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {});
+                        },
+                      ),
+                filled: true,
+                fillColor: cs.primary.withOpacity(0.06),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: cs.primary.withOpacity(0.35), width: 1.2),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Status chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _statusChip('รออนุมัติ', 'pending', tone: _Tone.orange),
+                  _statusChip('อนุมัติ', 'approved', tone: _Tone.green),
+                  _statusChip('ปฏิเสธ', 'rejected', tone: _Tone.red),
+                  _statusChip('เสร็จสิ้น', 'completed', tone: _Tone.blueGrey),
+                  _statusChip('ทั้งหมด', 'all', tone: _Tone.normal),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _statusChip(String label, String value, {required _Tone tone}) {
+    final cs = Theme.of(context).colorScheme;
     final selected = statusFilter == value;
     final color = _toneColor(tone);
 
@@ -168,20 +320,26 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
         label: Text(label),
         selected: selected,
         onSelected: (_) => setState(() => statusFilter = value),
-        selectedColor: color.withOpacity(0.16),
+        selectedColor: color.withOpacity(0.18),
+        backgroundColor: cs.primary.withOpacity(0.04),
         labelStyle: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: selected ? color : Colors.black.withOpacity(0.7),
+          fontWeight: FontWeight.w900,
+          color: selected ? color : Colors.black.withOpacity(0.70),
         ),
-        side: BorderSide(color: color.withOpacity(selected ? 0.35 : 0.18)),
+        side: BorderSide(
+          color: color.withOpacity(selected ? 0.35 : 0.18),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
     );
   }
 
   // =========================
-  // Card
+  // Card (ตกแต่งใหม่ แต่ logic เดิม)
   // =========================
   Widget _apptCard(BuildContext context, Map<String, dynamic> a) {
+    final cs = Theme.of(context).colorScheme;
+
     final id = (a['id'] ?? '').toString();
     final patientName = (a['patientName'] ?? '-').toString();
     final patientUid = (a['patientUid'] ?? '-').toString();
@@ -205,16 +363,16 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
     final badge = _statusBadge(status);
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        borderRadius: BorderRadius.circular(22),
+        color: Colors.white.withOpacity(0.94),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -224,8 +382,14 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
           // header
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: badge.color.withOpacity(0.14),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: badge.color.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: badge.color.withOpacity(0.22)),
+                ),
                 child: Icon(badge.icon, color: badge.color),
               ),
               const SizedBox(width: 10),
@@ -236,11 +400,24 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                     Text(
                       patientName,
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      'วันเวลา: $dateText',
-                      style: TextStyle(color: Colors.black.withOpacity(0.65)),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule, size: 14, color: cs.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            dateText,
+                            style: TextStyle(
+                              color: Colors.black.withOpacity(0.65),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -252,11 +429,15 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
           const SizedBox(height: 8),
           Text(
             'patientUid: $patientUid',
-            style: TextStyle(color: Colors.black.withOpacity(0.55), fontSize: 12.5),
+            style: TextStyle(
+              color: Colors.black.withOpacity(0.55),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
           ),
 
           if (note.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _miniBox(
               title: 'หมายเหตุผู้ป่วย',
               text: note,
@@ -265,7 +446,7 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
           ],
 
           if (adminNote.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _miniBox(
               title: 'หมายเหตุแอดมิน/แพทย์',
               text: adminNote,
@@ -273,6 +454,8 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
             ),
           ],
 
+          const SizedBox(height: 12),
+          Container(height: 1, color: Colors.black.withOpacity(0.06)),
           const SizedBox(height: 12),
 
           // actions
@@ -283,6 +466,15 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.check_circle),
                     label: const Text('อนุมัติ'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                     onPressed: () async {
                       final note =
                           await _noteDialog(context, 'อนุมัติ', hint: 'ระบุหมายเหตุ (ถ้ามี)');
@@ -317,6 +509,14 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.cancel, color: Colors.red),
                     label: const Text('ปฏิเสธ'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: Colors.red.withOpacity(0.35)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                     onPressed: () async {
                       final reason =
                           await _noteDialog(context, 'ปฏิเสธ', hint: 'ระบุเหตุผล (จำเป็น)');
@@ -359,6 +559,15 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.verified),
                       label: const Text('ทำเครื่องหมายเสร็จสิ้น'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
                       onPressed: () async {
                         final ok = await _confirm(
                             context, 'เสร็จสิ้น', 'ยืนยันทำเครื่องหมาย “เสร็จสิ้น” ?');
@@ -390,6 +599,14 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.edit_note),
                       label: const Text('เพิ่มหมายเหตุ'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(color: cs.primary.withOpacity(0.30)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
                       onPressed: () async {
                         final note =
                             await _noteDialog(context, 'เพิ่มหมายเหตุ', hint: 'บันทึกหมายเหตุ');
@@ -419,20 +636,32 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
   }
 
   // =========================
-  // Helpers
+  // Helpers (เดิม)
   // =========================
   Future<String?> _noteDialog(BuildContext context, String title, {String? hint}) async {
+    final cs = Theme.of(context).colorScheme;
     final controller = TextEditingController();
     final res = await showDialog<String?>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(title),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         content: TextField(
           controller: controller,
           maxLines: 3,
           decoration: InputDecoration(
             hintText: hint ?? 'หมายเหตุ',
-            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: cs.primary.withOpacity(0.06),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: cs.primary.withOpacity(0.35), width: 1.2),
+            ),
           ),
         ),
         actions: [
@@ -441,6 +670,11 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
             child: const Text('ยกเลิก'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: cs.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('ยืนยัน'),
           ),
@@ -451,14 +685,24 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
   }
 
   Future<bool?> _confirm(BuildContext context, String title, String msg) {
+    final cs = Theme.of(context).colorScheme;
     return showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(title),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         content: Text(msg),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ยกเลิก')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('ยืนยัน')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: cs.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ยืนยัน'),
+          ),
         ],
       ),
     );
@@ -466,11 +710,11 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
 
   Widget _pill(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.30)),
+        border: Border.all(color: color.withOpacity(0.22)),
       ),
       child: Text(
         text,
@@ -480,21 +724,38 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
   }
 
   Widget _miniBox({required String title, required String text, required _Tone tone}) {
+    final cs = Theme.of(context).colorScheme;
     final c = _toneColor(tone);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: c.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: c.withOpacity(0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: c)),
-          const SizedBox(height: 4),
-          Text(text),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: c)),
+              const Spacer(),
+              Icon(Icons.notes, size: 16, color: cs.primary.withOpacity(0.55)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text,
+            style: TextStyle(color: Colors.black.withOpacity(0.78)),
+          ),
         ],
       ),
     );

@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'firebase_options.dart';
 import 'gates/auth_gate.dart';
+import 'theme/jitdee_theme.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -17,7 +18,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // ถ้าต้องการทำอะไรเพิ่มตอน background มา ก็ใส่ตรงนี้ได้
 }
 
 /// ✅ Android Channel (ต้องตรงกับ manifest ที่เราใส่ไว้: jiddee_channel)
@@ -32,12 +32,7 @@ Future<void> _initLocalNotifications() async {
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   const initSettings = InitializationSettings(android: androidInit);
 
-  await flutterLocalNotificationsPlugin.initialize(
-    initSettings,
-    // onDidReceiveNotificationResponse: (resp) {
-    //   // ถ้าต้องการกด notification แล้วพาไปหน้าไหน ค่อยทำทีหลังได้
-    // },
-  );
+  await flutterLocalNotificationsPlugin.initialize(initSettings);
 
   // ✅ สร้าง channel สำหรับ Android 8+
   final androidPlugin = flutterLocalNotificationsPlugin
@@ -125,9 +120,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    // ❗ ห้ามใส่ const MaterialApp เพราะเราต้องส่ง theme/darkTheme ที่เป็น object
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: AuthGate(),
+
+      // ✅ ใส่ธีมใหม่ของ Jitdee (UI เปลี่ยน แต่ logic ไม่เปลี่ยน)
+      theme: JitdeeTheme.light(),
+      darkTheme: JitdeeTheme.dark(),
+      themeMode: ThemeMode.system, // หรือ ThemeMode.light ถ้ายังไม่ใช้ dark
+
+      home: const AuthGate(),
     );
   }
 }

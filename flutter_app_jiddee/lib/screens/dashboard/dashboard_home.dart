@@ -16,6 +16,9 @@ class DashboardHome extends StatelessWidget {
   final AppUser user;
   const DashboardHome({super.key, required this.user});
 
+  // ✅ เปลี่ยนได้ตามตำแหน่งที่หนูใส่ asset
+  static const String _mascotAsset = 'assets/images/jitdee_mascot.png';
+
   bool get _profileIncomplete {
     return user.name.trim().isEmpty ||
         (user.phone ?? '').trim().isEmpty ||
@@ -29,6 +32,8 @@ class DashboardHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final phq = (user.phq9RiskLevel ?? '').toLowerCase();
     final deep = (user.deepRiskLevel ?? '').toLowerCase();
 
@@ -70,61 +75,65 @@ class DashboardHome extends StatelessWidget {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFF5F3FF), Color(0xFFE0F2FE), Color(0xFFFFFFFF)],
+            colors: [
+              cs.primary.withOpacity(0.10),
+              cs.secondary.withOpacity(0.12),
+              const Color(0xFFFFFFFF),
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _topBar(context),
-                const SizedBox(height: 20),
-
-                if (_profileIncomplete) _profileWarning(),
-
                 const SizedBox(height: 16),
-                _heroCard(),
 
-                const SizedBox(height: 28),
-                _sectionTitle("เมนูหลัก"),
+                if (_profileIncomplete) _profileWarning(context),
 
                 const SizedBox(height: 14),
+
+                // ✅ เปลี่ยนจาก _heroCard เป็น hero header แบบมีน้อง
+                _heroHeader(context),
+
+                const SizedBox(height: 24),
+                _sectionTitle(context, "เมนูหลัก"),
+                const SizedBox(height: 12),
+
                 _newsHighlight(context),
 
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
                 _quickActions(context, canRequestAppointment),
 
                 if (deepNotDone || deepIsYellow) ...[
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   _deepAlert(context),
                 ],
 
-                const SizedBox(height: 30),
-                _sectionTitle("สถานะล่าสุด"),
-                const SizedBox(height: 14),
+                const SizedBox(height: 26),
+                _sectionTitle(context, "สถานะล่าสุด"),
+                const SizedBox(height: 12),
 
                 _statusCard(
+                  context: context,
                   title: "PHQ-9",
                   subtitle: hasPhq9 && phq9Risk != null
                       ? "ทำแล้ว • ${phq9Risk.label}"
                       : "ยังไม่ได้ทำแบบประเมิน",
-                  icon: hasPhq9 && phq9Risk != null
-                      ? phq9Risk.icon
-                      : Icons.warning,
-                  color: hasPhq9 && phq9Risk != null
-                      ? phq9Risk.color
-                      : Colors.orange,
+                  icon: hasPhq9 && phq9Risk != null ? phq9Risk.icon : Icons.warning,
+                  color: hasPhq9 && phq9Risk != null ? phq9Risk.color : Colors.orange,
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
                 _statusCard(
+                  context: context,
                   title: "TMHI-55",
                   subtitle: deepText,
                   icon: deepIcon,
@@ -139,11 +148,17 @@ class DashboardHome extends StatelessWidget {
   }
 
   Widget _topBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: [
-        const Text(
+        Text(
           "JitDee",
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Colors.black.withOpacity(0.82),
+          ),
         ),
         const Spacer(),
 
@@ -155,8 +170,7 @@ class DashboardHome extends StatelessWidget {
               .where('read', isEqualTo: false)
               .snapshots(),
           builder: (context, snapshot) {
-            final hasUnread =
-                snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+            final hasUnread = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
 
             return Stack(
               children: [
@@ -173,8 +187,8 @@ class DashboardHome extends StatelessWidget {
                     child: Container(
                       width: 10,
                       height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -198,8 +212,6 @@ class DashboardHome extends StatelessWidget {
                 );
               },
             ),
-
-            /// 🔴 จุดแดงถ้ากรอกข้อมูลไม่ครบ
             if (_profileIncomplete)
               Positioned(
                 right: 10,
@@ -208,7 +220,7 @@ class DashboardHome extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: const BoxDecoration(
-                    color: Colors.red,
+                    color: Color(0xFFFF6B6B),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -231,81 +243,35 @@ class DashboardHome extends StatelessWidget {
     );
   }
 
-  Widget _profileWarning() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text(
-        "กรุณากรอกข้อมูลของท่านให้ครบ",
-        style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
-      ),
-    );
-  }
-
-  Widget _heroCard() {
-    final risk = riskFromString(user.phq9RiskLevel);
-    final badgeColor = risk?.color ?? Colors.blueGrey;
-    final badgeText = risk == null
-        ? "ยังไม่มีผลประเมิน"
-        : "PHQ-9 : ${risk.label}";
+  Widget _profileWarning(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFFFFF), Color(0xFFF1F5FF)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 18,
-            color: Colors.black.withOpacity(.05),
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: const Color(0xFFFF6B6B).withOpacity(0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFF6B6B).withOpacity(0.18)),
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 30,
-            backgroundColor: Color(0xFFEDE9FE),
-            child: Icon(Icons.favorite, color: Colors.purple),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.info_outline, color: cs.primary),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Welcome, ${user.name}",
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withOpacity(.15),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: Text(
-                    badgeText,
-                    style: TextStyle(
-                      color: badgeColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              "กรุณากรอกข้อมูลของท่านให้ครบ",
+              style: TextStyle(
+                color: Color(0xFFE24A4A),
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -313,7 +279,166 @@ class DashboardHome extends StatelessWidget {
     );
   }
 
+  // ✅ HERO HEADER ใส่น้อง + โทนคลื่น/ทะเล (ตกแต่งล้วน)
+  Widget _heroHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final risk = riskFromString(user.phq9RiskLevel);
+    final badgeColor = risk?.color ?? cs.primary;
+    final badgeText = risk == null ? "ยังไม่มีผลประเมิน" : "PHQ-9 : ${risk.label}";
+
+    return Container(
+      height: 220,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.secondary.withOpacity(0.35),
+            cs.primary.withOpacity(0.18),
+            Colors.white.withOpacity(0.95),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 22,
+            color: Colors.black.withOpacity(.06),
+            offset: const Offset(0, 12),
+          ),
+        ],
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            // วงกลมตกแต่งมุมบนซ้าย (คล้ายตัวอย่าง)
+            Positioned(
+              left: -60,
+              top: -60,
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: cs.secondary.withOpacity(0.20),
+                ),
+              ),
+            ),
+                // 🌫 เงาวงรีลอยนุ่ม ๆ
+              Positioned(
+                right: 48,     // ขยับให้ตรงกลางท้องน้อง
+                bottom: 48,    // ยกขึ้นนิดนึง
+                child: Container(
+                  width: 110,  // กว้างขึ้นหน่อย
+                  height: 16,  // บางลง
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.20),
+                        blurRadius: 30,
+                        spreadRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // คลื่นแบบนิ่ม ๆ (เป็นแถบโค้ง)
+            Positioned(
+              left: -40,
+              right: -40,
+              top: 96,
+              child: Container(
+                height: 160,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      cs.primary.withOpacity(0.08),
+                      cs.primary.withOpacity(0.02),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // น้อง Jitdee
+            Positioned(
+              right: 10,
+              top: 10,
+              child: Opacity(
+                opacity: 0.95,
+                child: Image.asset(
+                  _mascotAsset,
+                  width: 150,
+                  height: 150,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+
+            // ข้อความ + badge
+            Positioned(
+              left: 18,
+              right: 140,
+              bottom: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Welcome,",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black.withOpacity(0.80),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    user.name.trim().isEmpty ? "เพื่อนของเรา" : user.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black.withOpacity(0.86),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withOpacity(.14),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: badgeColor.withOpacity(0.18)),
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        color: badgeColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _newsHighlight(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return InkWell(
       borderRadius: BorderRadius.circular(26),
       onTap: () {
@@ -323,29 +448,29 @@ class DashboardHome extends StatelessWidget {
         );
       },
       child: Container(
-        height: 140, // ความสูงคงที่
-        padding: const EdgeInsets.all(20),
+        height: 140,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(26),
-          color: Colors.white,
+          color: Colors.white.withOpacity(0.92),
           boxShadow: [
             BoxShadow(
-              blurRadius: 18,
-              color: Colors.black.withOpacity(.05),
-              offset: const Offset(0, 8),
+              blurRadius: 22,
+              color: Colors.black.withOpacity(.06),
+              offset: const Offset(0, 12),
             ),
           ],
+          border: Border.all(color: Colors.black.withOpacity(0.04)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFFEDE9FE),
-              child: Icon(Icons.article, color: Colors.purple),
+            CircleAvatar(
+              backgroundColor: cs.secondary.withOpacity(0.35),
+              child: Icon(Icons.article, color: cs.primary),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
 
-            /// 🔥 ดึงข่าวล่าสุด
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -368,9 +493,7 @@ class DashboardHome extends StatelessWidget {
                     );
                   }
 
-                  final data =
-                      snapshot.data!.docs.first.data() as Map<String, dynamic>;
-
+                  final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
                   final String title = data['title'] ?? "ไม่มีหัวข้อข่าว";
                   final String content = data['content'] ?? "";
 
@@ -384,7 +507,7 @@ class DashboardHome extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w900,
                               fontSize: 14,
                             ),
                           ),
@@ -396,27 +519,25 @@ class DashboardHome extends StatelessWidget {
                               overflow: TextOverflow.clip,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.black.withOpacity(.6),
+                                color: Colors.black.withOpacity(.60),
                               ),
                             ),
                           ),
                         ],
                       ),
-
-                      /// 🔥 Fade ด้านล่างให้จาง
                       Positioned(
                         bottom: 0,
                         left: 0,
                         right: 0,
                         child: Container(
-                          height: 30,
+                          height: 28,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
                                 Colors.white.withOpacity(0),
-                                Colors.white,
+                                Colors.white.withOpacity(0.92),
                               ],
                             ),
                           ),
@@ -429,7 +550,7 @@ class DashboardHome extends StatelessWidget {
             ),
 
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right),
+            Icon(Icons.chevron_right, color: Colors.black.withOpacity(0.45)),
           ],
         ),
       ),
@@ -441,6 +562,7 @@ class DashboardHome extends StatelessWidget {
       children: [
         Expanded(
           child: _actionCard(
+            context: context,
             icon: Icons.assignment,
             title: "ทำแบบประเมิน",
             subtitle: "PHQ-9",
@@ -465,6 +587,7 @@ class DashboardHome extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(
           child: _actionCard(
+            context: context,
             icon: Icons.calendar_month,
             title: "นัดแพทย์",
             subtitle: canRequestAppointment ? "ส่งคำขอ" : "ทำ Deep ก่อน",
@@ -491,45 +614,49 @@ class DashboardHome extends StatelessWidget {
   }
 
   Widget _actionCard({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
     return InkWell(
       borderRadius: BorderRadius.circular(24),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: Colors.white,
+          color: Colors.white.withOpacity(0.92),
           boxShadow: [
             BoxShadow(
-              blurRadius: 18,
-              color: Colors.black.withOpacity(.05),
-              offset: const Offset(0, 8),
+              blurRadius: 22,
+              color: Colors.black.withOpacity(.06),
+              offset: const Offset(0, 12),
             ),
           ],
+          border: Border.all(color: Colors.black.withOpacity(0.04)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              backgroundColor: const Color(0xFFEDE9FE),
-              child: Icon(icon, color: Colors.purple),
+              backgroundColor: cs.secondary.withOpacity(0.35),
+              child: Icon(icon, color: cs.primary),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
             ),
             const SizedBox(height: 4),
             Text(
               subtitle,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.black.withOpacity(.6),
+                color: Colors.black.withOpacity(.60),
               ),
             ),
           ],
@@ -548,10 +675,11 @@ class DashboardHome extends StatelessWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: Colors.orange.withOpacity(.1),
+          color: Colors.orange.withOpacity(.10),
+          border: Border.all(color: Colors.orange.withOpacity(0.18)),
         ),
         child: Row(
           children: const [
@@ -560,7 +688,7 @@ class DashboardHome extends StatelessWidget {
             Expanded(
               child: Text(
                 "ทำแบบประเมินเชิงลึก (TMHI-55)",
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
             Icon(Icons.chevron_right),
@@ -571,23 +699,25 @@ class DashboardHome extends StatelessWidget {
   }
 
   Widget _statusCard({
+    required BuildContext context,
     required String title,
     required String subtitle,
     required IconData icon,
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.92),
         boxShadow: [
           BoxShadow(
-            blurRadius: 18,
-            color: Colors.black.withOpacity(.05),
-            offset: const Offset(0, 8),
+            blurRadius: 22,
+            color: Colors.black.withOpacity(.06),
+            offset: const Offset(0, 12),
           ),
         ],
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
       ),
       child: Row(
         children: [
@@ -595,7 +725,7 @@ class DashboardHome extends StatelessWidget {
             backgroundColor: color.withOpacity(.15),
             child: Icon(icon, color: color),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,14 +733,14 @@ class DashboardHome extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     fontSize: 15,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
-                  style: TextStyle(color: Colors.black.withOpacity(.6)),
+                  style: TextStyle(color: Colors.black.withOpacity(.60)),
                 ),
               ],
             ),
@@ -620,10 +750,25 @@ class DashboardHome extends StatelessWidget {
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+  Widget _sectionTitle(BuildContext context, String text) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+        ),
+      ],
     );
   }
 
@@ -646,6 +791,8 @@ class DashboardHome extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) {
+        final cs = Theme.of(context).colorScheme;
+
         return Container(
           padding: const EdgeInsets.all(20),
           height: 400,
@@ -654,7 +801,7 @@ class DashboardHome extends StatelessWidget {
             children: [
               const Text(
                 "การแจ้งเตือน",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -666,7 +813,9 @@ class DashboardHome extends StatelessWidget {
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      return Center(
+                        child: CircularProgressIndicator(color: cs.primary),
+                      );
                     }
 
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -679,20 +828,17 @@ class DashboardHome extends StatelessWidget {
                       itemCount: docs.length,
                       itemBuilder: (_, i) {
                         final data = docs[i].data() as Map<String, dynamic>;
-
                         final isRead = data['read'] ?? false;
 
                         return ListTile(
                           leading: Icon(
                             Icons.notifications,
-                            color: isRead ? Colors.grey : Colors.red,
+                            color: isRead ? Colors.black38 : cs.primary,
                           ),
                           title: Text(
                             data['title'] ?? '',
                             style: TextStyle(
-                              fontWeight: isRead
-                                  ? FontWeight.normal
-                                  : FontWeight.bold,
+                              fontWeight: isRead ? FontWeight.w500 : FontWeight.w900,
                             ),
                           ),
                           subtitle: Text(data['body'] ?? ''),
