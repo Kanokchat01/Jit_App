@@ -340,20 +340,6 @@ class UserNewsScreen extends StatelessWidget {
                           ),
                         ),
                       const Spacer(),
-                      Row(
-                        children: [
-                          Icon(Icons.favorite, size: 16, color: cs.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            "Take care of your mind",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black.withOpacity(0.55),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ],

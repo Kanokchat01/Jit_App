@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
 import '../../services/firestore_service.dart';
-import '../patient/appointment_screen.dart';
 import '../../services/notification_service.dart';
+
+// ✅ AI imports
+import 'emotion_camera_widget.dart';
+import 'emotion_inference_service.dart';
+import 'emotion_aggregator.dart';
 
 class DeepAssessmentScreen extends StatefulWidget {
   final AppUser user;
@@ -30,6 +34,39 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
 
   /// debounce autosave
   Timer? _draftDebounce;
+
+  // =========================
+  // ✅ AI / Emotion (On-device)
+  // =========================
+  bool _useCamera = false; // ผู้ใช้ยินยอมใช้กล้องไหม
+  bool _aiReady = false; // โหลดโมเดลพร้อมแล้ว
+  bool _askedConsentOnce = false;
+
+  final EmotionInferenceService _emotionService =
+      EmotionInferenceService(everyNFrames: 1);
+
+  late final EmotionAggregator _emotionAgg;
+
+  static const int emotionMinSamplesToReport = 8;
+
+  // =========================
+  // ✅ DEBUG LIVE (แสดงผลแบบไม่โชว์กล้อง)
+  // =========================
+  String _emoLive = '...';
+  double _emoLiveConf = 0.0;
+  int _emoSamples = 0;
+  double _emoAvg = 0.0;
+
+  /// percent 0..100
+  Map<String, double> _emoPercent = <String, double>{};
+
+  /// ✅ debug text จาก EmotionCameraWidget (belowTh/obj/cls/shape/maxObjRaw...)
+  String _emoDebug = '';
+
+  // =========================
+  // ✅ UI ใหม่ (ตกแต่งเท่านั้น)
+  // =========================
+  static const String _mascotAsset = 'assets/images/jitdee_mascot.png';
 
   // ✅ คำถาม TMHI-55 (ครบ 55 ข้อ)
   final List<String> _questions = const [
@@ -98,13 +135,28 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   @override
   void initState() {
     super.initState();
+
     _answers = List<int>.filled(_questions.length, -1);
+
+    _emotionAgg = EmotionAggregator(
+      labels: const ['angry', 'fear', 'happy', 'neutral', 'sad'],
+      confidenceThreshold: 0.10,
+      maxSamples: 120,
+      emaAlpha: 0.20,
+      minMargin: 0.04,
+    );
+
     _loadDraftIfAny();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _askConsentIfNeeded();
+    });
   }
 
   @override
   void dispose() {
     _draftDebounce?.cancel();
+    _emotionService.dispose();
     super.dispose();
   }
 
@@ -112,9 +164,153 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   bool get _canSubmit => _answeredCount == _questions.length && !_saving;
 
   // =========================
-  // Draft: Load / Save / Clear (เดิม)
+  // ✅ Consent + Load AI
   // =========================
+  Future<void> _askConsentIfNeeded() async {
+    if (_askedConsentOnce) return;
+    _askedConsentOnce = true;
 
+    final res = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('ขออนุญาตใช้กล้อง'),
+        content: const Text(
+          'ระหว่างทำแบบสอบถามเชิงลึก ระบบสามารถวิเคราะห์อารมณ์จากใบหน้าแบบ On-device '
+          'เพื่อช่วยประเมินเพิ่มเติมได้\n\n'
+          '• ไม่มีการบันทึกรูป/วิดีโอ\n'
+          '• ประมวลผลบนเครื่องเท่านั้น\n'
+          'คุณยินยอมให้ใช้กล้องหรือไม่?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ไม่ยินยอม'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ยินยอม'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _useCamera = res ?? false;
+      _aiReady = false;
+    });
+
+    if (_useCamera) {
+      try {
+        _emotionAgg.reset();
+        _emoLive = '...';
+        _emoLiveConf = 0;
+        _emoSamples = 0;
+        _emoAvg = 0;
+        _emoPercent = <String, double>{};
+        _emoDebug = '';
+
+        await _emotionService.load();
+
+        if (!mounted) return;
+        setState(() => _aiReady = _emotionService.isLoaded);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _useCamera = false;
+          _aiReady = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('โหลดโมเดลอารมณ์ไม่สำเร็จ: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _aiLoadingCard() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 120,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+      ),
+      child: Center(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'กำลังเตรียม AI...',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emotionDebugCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Emotion: $_emoLive (${(_emoLiveConf * 100).toStringAsFixed(1)}%)',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'samples=$_emoSamples  avgConf=${_emoAvg.toStringAsFixed(3)}',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          if (_emoPercent.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              _emoPercent.entries
+                  .map((e) => '${e.key}:${e.value.toStringAsFixed(1)}%')
+                  .join(' | '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ],
+          if (_emoDebug.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'debug=$_emoDebug',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // =========================
+  // Draft: Load / Save / Clear
+  // =========================
   Future<void> _loadDraftIfAny() async {
     try {
       final draft = await _fs.watchDeepDraft(widget.user.uid).first;
@@ -170,17 +366,17 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                content: Text(
-                  'โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                duration: const Duration(seconds: 2),
-              ),
-            );
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            content: Text(
+              'โหลดคำตอบที่ค้างไว้แล้ว • ต่อได้ที่ข้อ ${_lastTouchedIndex + 1}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       } else {
         await _fs.clearDeepDraft(widget.user.uid);
         if (!mounted) return;
@@ -272,10 +468,8 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   }
 
   // =========================
-  // ✅ UI ใหม่ (ตกแต่งเท่านั้น)
+  // ✅ UI
   // =========================
-  static const String _mascotAsset = 'assets/images/jitdee_mascot.png';
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -322,7 +516,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
             ),
           ],
         ),
-
         body: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -342,6 +535,40 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
                   child: _introCard(context, answered, total),
                 ),
+
+                if (_useCamera)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: (_aiReady && _emotionService.isLoaded)
+                        ? Column(
+                            children: [
+                              // ✅ กล้องทำงาน แต่ไม่โชว์
+                              EmotionCameraWidget(
+                                service: _emotionService,
+                                aggregator: _emotionAgg,
+                                showPreview: false,
+                                useFaceDetector: true, // ✅ crop หน้าจริง
+                                onUpdate: (label, conf, samples, avgConf, debug) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _emoLive = label;
+                                  _emoLiveConf = conf;
+                                  _emoSamples = samples;
+                                  _emoAvg = avgConf;
+
+                                  // ✅ summaryEmaPercent() คืนค่าเป็น 0..100 แล้ว อย่าคูณซ้ำ
+                                  _emoPercent = _emotionAgg.summaryEmaPercent();
+
+                                  _emoDebug = debug;
+                                });
+                              },
+                              ),
+                              const SizedBox(height: 10),
+                              _emotionDebugCard(),
+                            ],
+                          )
+                        : _aiLoadingCard(),
+                  ),
 
                 Expanded(
                   child: ListView.builder(
@@ -365,7 +592,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
             ),
           ),
         ),
-
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
@@ -376,148 +602,149 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     );
   }
 
+  // -------------------------
+  // intro / question / submitBar
+  // -------------------------
+
   Widget _introCard(BuildContext context, int answered, int total) {
-  final cs = Theme.of(context).colorScheme;
-  final progress = total == 0 ? 0.0 : answered / total;
+    final cs = Theme.of(context).colorScheme;
+    final progress = total == 0 ? 0.0 : answered / total;
 
-  return Container(
-    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20),
-      color: Colors.white.withOpacity(0.88),
-      border: Border.all(color: Colors.black.withOpacity(0.05)),
-      boxShadow: [
-        BoxShadow(
-          blurRadius: 14,
-          offset: const Offset(0, 8),
-          color: Colors.black.withOpacity(0.05),
-        ),
-      ],
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // mascot small
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(14),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.88),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.05),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Image.asset(_mascotAsset, fit: BoxFit.contain),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(_mascotAsset, fit: BoxFit.contain),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "ตอบแล้ว $answered / $total ข้อ",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.5,
+                    color: Colors.black.withOpacity(0.82),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 8,
+                    backgroundColor: Colors.black.withOpacity(0.06),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      cs.primary.withOpacity(0.85),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                "ตอบแล้ว $answered / $total ข้อ",
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14.5,
-                  color: Colors.black.withOpacity(0.82),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 8,
-                  backgroundColor: Colors.black.withOpacity(0.06),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    cs.primary.withOpacity(0.85),
+              if (answered > 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00B894).withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: const Color(0xFF00B894).withOpacity(0.20),
+                    ),
                   ),
+                  child: const Text(
+                    "Draft: ON",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      color: Color(0xFF00B894),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 6),
+              InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    builder: (_) => const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 18, 20, 22),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "วิธีให้คะแนน 0–3",
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w900),
+                          ),
+                          SizedBox(height: 10),
+                          Text("0 = ไม่เลย"),
+                          Text("1 = เล็กน้อย"),
+                          Text("2 = มาก"),
+                          Text("3 = มากที่สุด"),
+                          SizedBox(height: 10),
+                          Text(
+                            "ตอบตามความรู้สึกของคุณในช่วงที่ผ่านมา",
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: cs.primary.withOpacity(0.18)),
+                  ),
+                  child: Icon(Icons.help_outline, color: cs.primary, size: 18),
                 ),
               ),
             ],
           ),
-        ),
-        const SizedBox(width: 10),
-
-        // right actions
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Draft pill (ถ้าตอบแล้ว)
-            if (answered > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00B894).withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: const Color(0xFF00B894).withOpacity(0.20),
-                  ),
-                ),
-                child: const Text(
-                  "Draft: ON",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                    color: Color(0xFF00B894),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 6),
-
-            // Help button (ดูคำอธิบาย 0–3)
-            InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  builder: (_) => Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          "วิธีให้คะแนน 0–3",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                        ),
-                        SizedBox(height: 10),
-                        Text("0 = ไม่เลย"),
-                        Text("1 = เล็กน้อย"),
-                        Text("2 = มาก"),
-                        Text("3 = มากที่สุด"),
-                        SizedBox(height: 10),
-                        Text(
-                          "ตอบตามความรู้สึกของคุณในช่วงที่ผ่านมา",
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: cs.primary.withOpacity(0.18)),
-                ),
-                child: Icon(Icons.help_outline, color: cs.primary, size: 18),
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   Widget _questionCard({
     required BuildContext context,
@@ -585,7 +812,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -602,7 +828,8 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                       },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     color: isOn
@@ -625,7 +852,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                         "$v",
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
-                          color: isOn ? cs.primary : Colors.black.withOpacity(0.72),
+                          color: isOn
+                              ? cs.primary
+                              : Colors.black.withOpacity(0.72),
                         ),
                       ),
                     ],
@@ -655,7 +884,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
           backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
         ),
-        onPressed: _canSubmit ? _submit : null, // ✅ logic เดิม
+        onPressed: _canSubmit ? _submit : null,
         child: Ink(
           decoration: BoxDecoration(
             gradient: _canSubmit
@@ -697,40 +926,23 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     );
   }
 
-  Widget _pill({
-    required Color color,
-    required Color border,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-      ),
-      child: child,
-    );
-  }
-
   // =========================
   // Scoring (เดิม)
   // =========================
-
   int _calculateScore() {
     int total = 0;
 
     for (int i = 0; i < _answers.length; i++) {
       final qNo = i + 1;
-      final ans = _answers[i]; // 0..3
-      final base = ans + 1; // 1..4
+      final ans = _answers[i];
+      final base = ans + 1;
 
       final isReverse = _reverseItems.contains(qNo);
       final score = isReverse ? (5 - base) : base;
 
       total += score;
     }
-    return total; // 55..220
+    return total;
   }
 
   ({String level, String label, Color color}) _interpret(int score) {
@@ -744,9 +956,8 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
   }
 
   // =========================
-  // Submit (เดิม)
+  // ✅ Submit (เดิม + เก็บ emotion ให้ชัวร์)
   // =========================
-
   Future<void> _submit() async {
     if (!_canSubmit) return;
 
@@ -757,10 +968,38 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       final score = _calculateScore();
       final result = _interpret(score);
 
+      if (_useCamera) {
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
+
+      final int emotionSamples = _useCamera ? _emotionAgg.samples : 0;
+      final double emotionAvgConf =
+          _useCamera ? _emotionAgg.avgConfidence : 0.0;
+
+      final Map<String, double> summaryPercent =
+          (_useCamera && emotionSamples > 0)
+              ? _emotionAgg.summaryEmaPercent()
+              : <String, double>{};
+
+      final String dominantEmotion =
+          (_useCamera && emotionSamples > 0)
+              ? _emotionAgg.dominantEmotion()
+              : '';
+
+      final double dominantScore =
+          (_useCamera && emotionSamples > 0)
+              ? _emotionAgg.dominantScore()
+              : 0.0;
+
       await _fs.updateDeepAssessmentStatus(
         uid: widget.user.uid,
         deepRiskLevel: result.level,
         deepScore: score,
+        emotionSamples: emotionSamples,
+        emotionAvgConf: emotionAvgConf,
+        dominantEmotion: dominantEmotion,
+        dominantScore: dominantScore,
+        emotionSummaryPercent: summaryPercent,
       );
 
       if (result.level == 'yellow') {
@@ -772,6 +1011,9 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       await _fs.clearDeepDraft(widget.user.uid);
 
       if (!mounted) return;
+
+      final bool lowSamples =
+          _useCamera && (emotionSamples < emotionMinSamplesToReport);
 
       await showDialog(
         context: context,
@@ -804,10 +1046,36 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                     ),
                   ],
                 ),
+                if (_useCamera) ...[
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Emotion (On-device): samples=$emotionSamples • conf=${emotionAvgConf.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    (summaryPercent.isEmpty)
+                        ? (lowSamples
+                            ? 'ยังเก็บข้อมูลอารมณ์ได้น้อย/ไม่พอ (ลองให้หน้าชัดขึ้น/อยู่ในกรอบกล้อง 5–10 วินาที)'
+                            : 'ไม่พบข้อมูลอารมณ์ (อาจเกิดจากกล้องมืด/หน้าไม่ชัด/สีเพี้ยน)')
+                        : ([
+                            if (dominantEmotion.isNotEmpty)
+                              'Dominant: $dominantEmotion (${(dominantScore * 100).toStringAsFixed(0)}%)',
+                            summaryPercent.entries
+                                .map((e) =>
+                                    '${e.key}:${e.value.toStringAsFixed(0)}%')
+                                .join('  |  ')
+                          ]).join('\n'),
+                    maxLines: 6,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Text(
                   result.level == 'red'
-                      ? 'ระบบแนะนำให้ติดต่อแพทย์เพื่อประเมินเพิ่มเติม'
+                      ? 'ระบบแนะนำให้ติดต่อแพทย์เพื่อประเมินเพิ่มเติม (กรุณานัดหมายที่หน้า HOME)'
                       : 'คุณสามารถกลับไปหน้า Home เพื่อดูสถานะได้',
                 ),
               ],
@@ -823,17 +1091,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
       );
 
       if (!mounted) return;
-
-      if (result.level == 'red') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AppointmentScreen(user: widget.user),
-          ),
-        );
-      } else {
-        Navigator.popUntil(context, (route) => route.isFirst);
-      }
+      Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
