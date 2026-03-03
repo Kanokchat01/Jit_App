@@ -125,6 +125,10 @@ class FirestoreService {
     String? dominantEmotion,
     double? dominantScore,
     Map<String, double>? emotionSummaryPercent,
+
+    // ✅ happiness score
+    double? happinessScore,
+    String? happinessLevel,
   }) async {
     final data = <String, dynamic>{
       'hasCompletedDeepAssessment': true,
@@ -148,6 +152,8 @@ class FirestoreService {
         'dominant': (dominantEmotion ?? '').toString(),
         'dominantScore': dominantScore ?? 0.0,
         'summaryPercent': emotionSummaryPercent ?? <String, double>{},
+        'happinessScore': happinessScore ?? 0.0,
+        'happinessLevel': (happinessLevel ?? '').toString(),
         'capturedAt': FieldValue.serverTimestamp(),
       };
     }

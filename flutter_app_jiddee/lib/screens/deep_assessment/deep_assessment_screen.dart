@@ -982,7 +982,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
 
       final Map<String, double> summaryPercent =
           (_useCamera && emotionSamples > 0)
-              ? _emotionAgg.summaryEmaPercent()
+              ? _emotionAgg.summaryCountPercent()
               : <String, double>{};
 
       final String dominantEmotion =
@@ -995,6 +995,16 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
               ? _emotionAgg.dominantScore()
               : 0.0;
 
+      // ✅ Happiness Score
+      final double hScore =
+          (_useCamera && emotionSamples > 0)
+              ? _emotionAgg.happinessScore()
+              : 0.0;
+      final String hLevel =
+          (_useCamera && emotionSamples > 0)
+              ? _emotionAgg.happinessLevel()
+              : '';
+
       await _fs.updateDeepAssessmentStatus(
         uid: widget.user.uid,
         deepRiskLevel: result.level,
@@ -1004,6 +1014,8 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         dominantEmotion: dominantEmotion,
         dominantScore: dominantScore,
         emotionSummaryPercent: summaryPercent,
+        happinessScore: hScore,
+        happinessLevel: hLevel,
       );
 
       if (result.level == 'yellow') {

@@ -101,7 +101,7 @@ class _EmotionCameraWidgetState extends State<EmotionCameraWidget> {
 
     _controller = CameraController(
       front,
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
       imageFormatGroup: Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
     );

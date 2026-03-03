@@ -57,6 +57,10 @@ class AppUser {
   final double? dominantScore;
   final Map<String, double>? emotionSummaryPercent;
 
+  // ✅ Happiness Score
+  final double? happinessScore;
+  final String? happinessLevel;
+
   const AppUser({
     required this.uid,
     required this.name,
@@ -82,6 +86,8 @@ class AppUser {
     this.dominantEmotion,
     this.dominantScore,
     this.emotionSummaryPercent,
+    this.happinessScore,
+    this.happinessLevel,
   });
 
   factory AppUser.fromMap(String uid, Map<String, dynamic> data) {
@@ -117,6 +123,8 @@ class AppUser {
       dominantEmotion: _emoString(data, 'dominant'),
       dominantScore: _emoDouble(data, 'dominantScore'),
       emotionSummaryPercent: _emoPercent(data),
+      happinessScore: _emoDouble(data, 'happinessScore'),
+      happinessLevel: _emoString(data, 'happinessLevel'),
     );
   }
 
@@ -185,6 +193,8 @@ class AppUser {
           'dominant': dominantEmotion ?? '',
           'dominantScore': dominantScore ?? 0.0,
           'summaryPercent': emotionSummaryPercent ?? <String, double>{},
+          'happinessScore': happinessScore ?? 0.0,
+          'happinessLevel': happinessLevel ?? '',
         },
     };
   }

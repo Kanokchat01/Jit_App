@@ -61,7 +61,7 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +138,7 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                   ),
                 ),
 
-                const Spacer(),
+                const SizedBox(height: 28),
 
                 // ✅ Submit Button
                 SizedBox(

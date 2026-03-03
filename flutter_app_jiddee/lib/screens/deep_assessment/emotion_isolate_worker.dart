@@ -39,6 +39,7 @@ const List<String> _labels = ['angry', 'fear', 'happy', 'neutral', 'sad'];
 
 double _sigmoid(double x) => 1.0 / (1.0 + exp(-x));
 
+
 dynamic _allocOutput(List<int> shape) {
   // รองรับเฉพาะ [1, A, B] หรือ [1, A, B, ...] -> เอา 3 มิติแรก
   if (shape.length < 3) {

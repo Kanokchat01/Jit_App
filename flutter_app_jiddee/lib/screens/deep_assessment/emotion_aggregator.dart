@@ -38,6 +38,9 @@ class EmotionAggregator {
 
   double _sumConfidence = 0.0;
 
+  /// ✅ นับจำนวนครั้งจริงของแต่ละอารมณ์ (ไม่ decay)
+  final Map<String, int> _rawCounts = {};
+
   EmotionAggCurrent? get current => _current;
 
   EmotionAggregator({
@@ -60,8 +63,10 @@ class EmotionAggregator {
     _sumConfidence = 0.0;
 
     _ema.clear();
+    _rawCounts.clear();
     for (final l in labels) {
       _ema[l] = 0.0;
+      _rawCounts[l] = 0;
     }
     _current = null;
   }
@@ -76,6 +81,9 @@ class EmotionAggregator {
       _updateCurrent();
       return;
     }
+
+    // ✅ นับจำนวนครั้งจริง
+    _rawCounts[label] = (_rawCounts[label] ?? 0) + 1;
 
     samples = min(samples + 1, maxSamples);
     _sumConfidence += conf;
@@ -95,12 +103,20 @@ class EmotionAggregator {
   void addSampleAll(Map<String, double> scores) {
     if (scores.isEmpty) return;
 
-    samples = min(samples + 1, maxSamples);
-
+    // ✅ นับจำนวนครั้งจริง: หา label ที่ score สูงสุด
+    String topLabel = '';
     double topConf = 0.0;
     for (final entry in scores.entries) {
-      if (entry.value > topConf) topConf = entry.value;
+      if (entry.value > topConf) {
+        topConf = entry.value;
+        topLabel = entry.key;
+      }
     }
+    if (topLabel.isNotEmpty && topConf >= confidenceThreshold) {
+      _rawCounts[topLabel] = (_rawCounts[topLabel] ?? 0) + 1;
+    }
+
+    samples = min(samples + 1, maxSamples);
     _sumConfidence += topConf;
     avgConfidence = _sumConfidence / max(1, samples);
 
@@ -125,6 +141,22 @@ class EmotionAggregator {
 
     return {
       for (final l in labels) l: (max(0.0, (m[l] ?? 0.0)) / sum) * 100.0
+    };
+  }
+
+  /// ✅ นับจำนวนดิบ
+  Map<String, int> get rawCounts => Map<String, int>.from(_rawCounts);
+
+  /// ✅ คิด % จากจำนวนครั้งจริง (ไม่ decay เหมือน EMA)
+  Map<String, double> summaryCountPercent() {
+    int total = 0;
+    for (final v in _rawCounts.values) {
+      total += v;
+    }
+    if (total <= 0) return {for (final l in labels) l: 0.0};
+    return {
+      for (final l in labels)
+        l: ((_rawCounts[l] ?? 0) / total) * 100.0,
     };
   }
 
@@ -240,5 +272,39 @@ class EmotionAggregator {
     }
 
     return null;
+  }
+
+  // =========================
+  // ✅ Happiness Score
+  // =========================
+
+  /// น้ำหนักอารมณ์ (expert-recommended for mental health screening)
+  static const Map<String, double> emotionWeights = {
+    'angry': -2.0,
+    'fear': -1.5,
+    'sad': -2.0,
+    'neutral': 0.5,
+    'happy': 2.0,
+  };
+
+  /// คำนวณ Happiness Score จาก count-based %
+  /// Range: -2.0 ถึง +2.0
+  double happinessScore() {
+    final pct = summaryCountPercent();
+    double score = 0.0;
+    for (final entry in emotionWeights.entries) {
+      score += (pct[entry.key] ?? 0.0) * entry.value;
+    }
+    return score / 100.0;
+  }
+
+  /// ตีความ Happiness Score เป็น 4 ระดับ
+  /// good (≥+0.5), normal (0~+0.49), monitor (-0.49~-0.01), warning (≤-0.5)
+  String happinessLevel() {
+    final s = happinessScore();
+    if (s >= 0.5) return 'good';
+    if (s >= 0.0) return 'normal';
+    if (s > -0.5) return 'monitor';
+    return 'warning';
   }
 }
