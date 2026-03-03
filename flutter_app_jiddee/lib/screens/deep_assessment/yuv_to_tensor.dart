@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'dart:ui' show Rect;
 
 /// แปลง CameraImage (YUV420) -> Float32List tensor แบบตรง ๆ
 /// - ตัดการสร้าง img.Image และการ resize ผ่าน image package
@@ -9,45 +10,32 @@ import 'package:camera/camera.dart';
 ///
 /// รองรับ:
 /// - mirror (กล้องหน้า)
-/// - centerSquareCrop (ตัดเป็นสี่เหลี่ยมจัตุรัสกลางภาพก่อนย่อ/ขยาย)
+/// - cropRect (ตัดกรอบสี่เหลี่ยมก่อนย่อ/ขยาย ถ้า null จะใช้เต็มภาพ)
 /// - normalize: [0..1] หรือ [-1..1]
 /// - swapUV บางเครื่อง U/V สลับกัน (หน้าคนเขียว/ม่วง)
 ///
-/// ใช้ integer YUV->RGB (เร็ว)
-Float32List yuv420ToTensor(
+/// ใช้ integer YUV->RGB (เร็ว) หรือแบบ bytes ตรงๆ สำหรับ BGRA
+Float32List cameraImageToTensor(
   CameraImage image, {
   required int targetW,
   required int targetH,
   required int inputC, // 1 หรือ 3
   required bool normalizeMinusOneToOne,
   bool mirror = false,
-  bool centerSquareCrop = true,
+  Rect? cropRect,
   bool swapUV = false,
   Float32List? reuseBuffer,
 }) {
   final int srcW = image.width;
   final int srcH = image.height;
 
-  final planeY = image.planes[0];
-  final planeU = image.planes[1];
-  final planeV = image.planes[2];
-
-  final Uint8List bytesY = planeY.bytes;
-  final Uint8List bytesU = planeU.bytes;
-  final Uint8List bytesV = planeV.bytes;
-
-  final int yRowStride = planeY.bytesPerRow;
-  final int uvRowStride = planeU.bytesPerRow;
-  final int uvPixelStride = planeU.bytesPerPixel ?? 1;
-
   // เลือก crop area ใน source
   int cropX = 0, cropY = 0, cropW = srcW, cropH = srcH;
-  if (centerSquareCrop) {
-    final s = math.min(srcW, srcH);
-    cropW = s;
-    cropH = s;
-    cropX = (srcW - s) ~/ 2;
-    cropY = (srcH - s) ~/ 2;
+  if (cropRect != null) {
+    cropX = cropRect.left.floor().clamp(0, srcW - 1);
+    cropY = cropRect.top.floor().clamp(0, srcH - 1);
+    cropW = cropRect.width.floor().clamp(1, srcW - cropX);
+    cropH = cropRect.height.floor().clamp(1, srcH - cropY);
   }
 
   final int outLen = targetW * targetH * inputC;
@@ -61,9 +49,62 @@ Float32List yuv420ToTensor(
 
   int idx = 0;
 
-  for (int dy = 0; dy < targetH; dy++) {
-    // map y
-    final int sy = (cropY + (dy * scaleY)).floor().clamp(0, srcH - 1);
+  if (image.format.group == ImageFormatGroup.bgra8888) {
+    final Uint8List bytes = image.planes[0].bytes;
+    final int bytesPerRow = image.planes[0].bytesPerRow;
+    final int bytesPerPixel = image.planes[0].bytesPerPixel ?? 4;
+
+    for (int dy = 0; dy < targetH; dy++) {
+      final int sy = (cropY + (dy * scaleY)).floor().clamp(0, srcH - 1);
+      final int rowOffset = sy * bytesPerRow;
+
+      for (int dx = 0; dx < targetW; dx++) {
+        final int mx = mirror ? (targetW - 1 - dx) : dx;
+        final int sx = (cropX + (mx * scaleX)).floor().clamp(0, srcW - 1);
+        final int offset = rowOffset + sx * bytesPerPixel;
+
+        int b = bytes[offset];
+        int g = bytes[offset + 1];
+        int r = bytes[offset + 2];
+
+        double rf = r / 255.0;
+        double gf = g / 255.0;
+        double bf = b / 255.0;
+
+        if (normalizeMinusOneToOne) {
+          rf = rf * 2.0 - 1.0;
+          gf = gf * 2.0 - 1.0;
+          bf = bf * 2.0 - 1.0;
+        }
+
+        if (inputC == 3) {
+          out[idx++] = rf;
+          out[idx++] = gf;
+          out[idx++] = bf;
+        } else if (inputC == 1) {
+          out[idx++] = (0.299 * rf + 0.587 * gf + 0.114 * bf);
+        }
+      }
+    }
+  } else {
+    // YUV420
+    final planeY = image.planes[0];
+    final planeU = image.planes[1];
+    final planeV = image.planes[2];
+
+    final Uint8List bytesY = planeY.bytes;
+    final Uint8List bytesU = planeU.bytes;
+    final Uint8List bytesV = planeV.bytes;
+
+    final int yRowStride = planeY.bytesPerRow;
+    final int uvRowStride = planeU.bytesPerRow;
+    final int uvPixelStride = planeU.bytesPerPixel ?? 1;
+
+    for (int dy = 0; dy < targetH; dy++) {
+      // map y
+      final int sy = (cropY + (dy * scaleY)).floor().clamp(0, srcH - 1);
+
+
 
     final int yRow = sy * yRowStride;
     final int uvRow = (sy >> 1) * uvRowStride;
@@ -121,8 +162,9 @@ Float32List yuv420ToTensor(
         out[idx++] = b;
       } else if (inputC == 1) {
         out[idx++] = (0.299 * r + 0.587 * g + 0.114 * b);
-      } else {
-        throw StateError('Unsupported inputC=$inputC (expected 1 or 3)');
+        } else {
+          throw StateError('Unsupported inputC=$inputC (expected 1 or 3)');
+        }
       }
     }
   }

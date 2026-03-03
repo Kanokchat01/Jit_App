@@ -158,28 +158,6 @@ class _AdminAppointmentQueueScreenState extends State<AdminAppointmentQueueScree
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Row(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.92),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(0.06)),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                    color: Colors.black.withOpacity(0.06),
-                  ),
-                ],
-              ),
-              child: Icon(Icons.arrow_back, color: Colors.black.withOpacity(0.75)),
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

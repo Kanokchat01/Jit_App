@@ -28,7 +28,7 @@ class FaceDetectorService {
     required DeviceOrientation deviceOrientation,
   }) async {
     try {
-      final input = _toInputImageNV21(
+      final input = _toInputImage(
         image,
         camera: camera,
         deviceOrientation: deviceOrientation,
@@ -48,13 +48,11 @@ class FaceDetectorService {
     }
   }
 
-  InputImage _toInputImageNV21(
+  InputImage _toInputImage(
     CameraImage image, {
     required CameraDescription camera,
     required DeviceOrientation deviceOrientation,
   }) {
-    final Uint8List nv21 = _yuv420ToNv21(image);
-
     final Size size = Size(image.width.toDouble(), image.height.toDouble());
 
     final int deviceDeg = _deviceOrientationToDegrees(deviceOrientation);
@@ -69,6 +67,23 @@ class FaceDetectorService {
     final InputImageRotation rotation =
         InputImageRotationValue.fromRawValue(rot) ??
             InputImageRotation.rotation0deg;
+
+    if (image.format.group == ImageFormatGroup.bgra8888) {
+      final InputImageMetadata metadata = InputImageMetadata(
+        size: size,
+        rotation: rotation,
+        format: InputImageFormat.bgra8888,
+        bytesPerRow: image.planes[0].bytesPerRow,
+      );
+
+      return InputImage.fromBytes(
+        bytes: image.planes[0].bytes,
+        metadata: metadata,
+      );
+    }
+
+    // Default to nv21 conversion for yuv420
+    final Uint8List nv21 = _yuv420ToNv21(image);
 
     // For NV21, bytesPerRow = image.width
     final InputImageMetadata metadata = InputImageMetadata(

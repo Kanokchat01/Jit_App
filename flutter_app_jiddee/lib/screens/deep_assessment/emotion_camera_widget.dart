@@ -4,11 +4,11 @@ import 'dart:ui' show Rect;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show DeviceOrientation;
+import 'dart:io';
 import 'package:image/image.dart' as img;
 
 import 'emotion_inference_service.dart';
 import 'emotion_aggregator.dart';
-import 'yuv_converter.dart';
 import 'face_detector_service.dart';
 
 class EmotionCameraWidget extends StatefulWidget {
@@ -103,7 +103,7 @@ class _EmotionCameraWidgetState extends State<EmotionCameraWidget> {
       front,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
     );
 
     await _controller!.initialize();
@@ -139,33 +139,39 @@ class _EmotionCameraWidgetState extends State<EmotionCameraWidget> {
           faceStatus = await _maybeUpdateFaceBox(camImg, nowMs);
         }
 
-        // 2) Convert to RGB for YOLO
-        final rgbFull = convertYUV420ToImage(
-          camImg,
-          swapUV: true,
-          downSample: 1,
-          camera: _camera!,
-          deviceOrientation: _controller?.value.deviceOrientation,
-          alignToMlkit: true,
-        );
+        // 2) Pack raw camera image data to delegate processing to backend Isolate
+        final imageMap = {
+          'width': camImg.width,
+          'height': camImg.height,
+          'formatGroup': camImg.format.group.name,
+          'planes': camImg.planes.map((p) => {
+                'bytes': p.bytes,
+                'bytesPerRow': p.bytesPerRow,
+                'bytesPerPixel': p.bytesPerPixel,
+              }).toList(),
+          'sensorOrientation': _camera!.sensorOrientation,
+          'lensDirection': _camera!.lensDirection.name,
+          'deviceOrientation': _controller?.value.deviceOrientation.name ?? 'portraitUp',
+        };
 
-        if (rgbFull == null) {
-          _maybeSetUi(nowMs, 'rgb-fail', 0.0,
-              debug: 'rgbFull=null face:$faceStatus');
+        Map<String, double>? faceBoxMap;
+        if (widget.useFaceDetector && _lastFaceBox != null && (nowMs - _lastFaceBoxMs) <= _faceBoxMaxAgeMs) {
+          faceBoxMap = {
+            'left': _lastFaceBox!.left,
+            'top': _lastFaceBox!.top,
+            'width': _lastFaceBox!.width,
+            'height': _lastFaceBox!.height,
+          };
+        } else if (widget.useFaceDetector) {
+          _maybeSetUi(nowMs, 'no-face', 0.0, debug: 'face:$faceStatus skip(no-face)');
           return;
         }
 
-        // 3) Crop by face box
-        final crop = _selectCrop(rgbFull, nowMs);
-        if (crop == null) {
-          _maybeSetUi(nowMs, 'no-face', 0.0,
-              debug: 'face:$faceStatus skip(no-face)');
-          return;
-        }
-
-        // 4) Predict
-        final pred = await widget.service.predictFromRgbImage(
-          crop,
+        // 4) Predict on Isolate
+        final pred = await widget.service.predictFromCameraImageMap(
+          imageMap,
+          faceBox: faceBoxMap,
+          useFaceDetector: widget.useFaceDetector,
           objTh: _objTh,
           clsTh: _clsTh,
           debug: true,
@@ -177,7 +183,12 @@ class _EmotionCameraWidgetState extends State<EmotionCameraWidget> {
           return;
         }
 
-        widget.aggregator.addSample(pred.label, pred.confidence);
+        // ✅ ส่ง allScores ให้ aggregator (แม่นกว่าส่งแค่ label)
+        if (pred.allScores.isNotEmpty) {
+          widget.aggregator.addSampleAll(pred.allScores);
+        } else {
+          widget.aggregator.addSample(pred.label, pred.confidence);
+        }
         final cur = widget.aggregator.current;
 
         final label = cur?.label ?? pred.label;
@@ -223,52 +234,7 @@ class _EmotionCameraWidgetState extends State<EmotionCameraWidget> {
     return status.startsWith('Y') ? status : 'N';
   }
 
-  img.Image? _selectCrop(img.Image full, int nowMs) {
-    if (!widget.useFaceDetector) return _centerCrop(full, area: 0.72);
 
-    if (_lastFaceBox != null && (nowMs - _lastFaceBoxMs) <= _faceBoxMaxAgeMs) {
-      return _cropByFaceBox(full, _lastFaceBox!);
-    }
-    return null; // accuracy-first
-  }
-
-  img.Image? _cropByFaceBox(img.Image full, Rect box) {
-    final w = full.width;
-    final h = full.height;
-
-    int x = box.left.round().clamp(0, w - 1);
-    int y = box.top.round().clamp(0, h - 1);
-    int cw = box.width.round().clamp(1, w - x);
-    int ch = box.height.round().clamp(1, h - y);
-
-    final pad = (0.18 * (cw < ch ? cw : ch)).round();
-    x = (x - pad).clamp(0, w - 1);
-    y = (y - pad).clamp(0, h - 1);
-    cw = (cw + pad * 2).clamp(1, w - x);
-    ch = (ch + pad * 2).clamp(1, h - y);
-
-    if (cw < 32 || ch < 32) return null;
-    return img.copyCrop(full, x: x, y: y, width: cw, height: ch);
-  }
-
-  img.Image? _centerCrop(img.Image full, {double area = 0.70}) {
-    final w = full.width;
-    final h = full.height;
-    final side = (w < h ? w : h);
-    final cropSide = (side * area).round();
-    if (cropSide < 32) return null;
-
-    final cx = (w / 2).round();
-    final cy = (h / 2).round();
-
-    final x = (cx - cropSide / 2).round().clamp(0, w - 1);
-    final y = (cy - cropSide / 2).round().clamp(0, h - 1);
-    final cw = cropSide.clamp(1, w - x);
-    final ch = cropSide.clamp(1, h - y);
-
-    if (cw <= 2 || ch <= 2) return null;
-    return img.copyCrop(full, x: x, y: y, width: cw, height: ch);
-  }
 
   void _maybeSetUi(int nowMs, String label, double conf, {required String debug}) {
     if (nowMs - _lastUiMs < _uiEveryMs) return;

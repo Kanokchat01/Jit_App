@@ -326,6 +326,131 @@ class AdminUserDetailScreen extends StatelessWidget {
                     value: user.hasCompletedDeepAssessment ? (user.deepRiskLevel ?? '-') : 'ยังไม่ได้ประเมิน',
                     color: _riskColorFromValue(user.deepRiskLevel),
                   ),
+
+                  // ✅ Emotion Detection Section
+                  if (user.dominantEmotion != null && user.emotionSummaryPercent != null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      height: 1,
+                      color: Colors.black.withOpacity(0.06),
+                    ),
+                    const SizedBox(height: 14),
+
+                    _subTitle('การวิเคราะห์อารมณ์ (AI On-device)'),
+                    const SizedBox(height: 10),
+
+                    // dominant emotion card
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _emotionColor(user.dominantEmotion).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _emotionColor(user.dominantEmotion).withOpacity(0.20),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            _emotionEmoji(user.dominantEmotion),
+                            style: const TextStyle(fontSize: 32),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'อารมณ์หลัก: ${_emotionLabel(user.dominantEmotion)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'ตรวจจับ ${user.emotionSamples ?? 0} ครั้ง • ความมั่นใจ ${((user.emotionAvgConf ?? 0) * 100).toStringAsFixed(0)}%',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black.withOpacity(0.55),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: _emotionColor(user.dominantEmotion).withOpacity(0.14),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: _emotionColor(user.dominantEmotion).withOpacity(0.25),
+                              ),
+                            ),
+                            child: Text(
+                              '${((user.dominantScore ?? 0) * 100).toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: _emotionColor(user.dominantEmotion),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // bar chart for all classes
+                    ...user.emotionSummaryPercent!.entries.map((e) {
+                      final pct = e.value.clamp(0.0, 100.0);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 60,
+                              child: Text(
+                                _emotionLabel(e.key),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                  color: Colors.black.withOpacity(0.65),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: LinearProgressIndicator(
+                                  value: pct / 100,
+                                  minHeight: 10,
+                                  backgroundColor: Colors.black.withOpacity(0.05),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    _emotionColor(e.key),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 40,
+                              child: Text(
+                                '${pct.toStringAsFixed(0)}%',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                  color: Colors.black.withOpacity(0.70),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
                 ],
               ),
             ),
@@ -346,6 +471,58 @@ class AdminUserDetailScreen extends StatelessWidget {
         return Colors.green;
       default:
         return Colors.blueGrey;
+    }
+  }
+
+  // ✅ Emotion helpers
+  Color _emotionColor(String? emotion) {
+    switch (emotion?.toLowerCase()) {
+      case 'happy':
+        return Colors.amber.shade700;
+      case 'sad':
+        return Colors.blue.shade600;
+      case 'angry':
+        return Colors.red.shade600;
+      case 'fear':
+        return Colors.deepOrange.shade400;
+      case 'neutral':
+        return Colors.teal.shade500;
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  String _emotionEmoji(String? emotion) {
+    switch (emotion?.toLowerCase()) {
+      case 'happy':
+        return '😊';
+      case 'sad':
+        return '😢';
+      case 'angry':
+        return '😠';
+      case 'fear':
+        return '😨';
+      case 'neutral':
+        return '😐';
+      default:
+        return '🤔';
+    }
+  }
+
+  String _emotionLabel(String? emotion) {
+    switch (emotion?.toLowerCase()) {
+      case 'happy':
+        return 'สุข';
+      case 'sad':
+        return 'เศร้า';
+      case 'angry':
+        return 'โกรธ';
+      case 'fear':
+        return 'กลัว';
+      case 'neutral':
+        return 'ปกติ';
+      default:
+        return emotion ?? '-';
     }
   }
 

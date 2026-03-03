@@ -140,10 +140,14 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
 
     _emotionAgg = EmotionAggregator(
       labels: const ['angry', 'fear', 'happy', 'neutral', 'sad'],
-      confidenceThreshold: 0.10,
+      confidenceThreshold: 0.05,
       maxSamples: 120,
       emaAlpha: 0.20,
-      minMargin: 0.04,
+      minMargin: 0.10,                          // ← ต้องชนะอันดับ 2 ชัด 10%+
+      neutralPreferMargin: 0.12,
+      neutralLowConfidenceGate: 0.45,           // ← EMA ต้อง > 45% ถึงจะออกจาก neutral
+      sadNeutralMinGap: 0.15,                   // ← sad ต้องนำ neutral 15%+ ถึงจะแสดง
+      stickyMargin: 0.08,                       // ← ต้องนำ emotion เดิม 8%+ ถึงจะเปลี่ยน
     );
 
     _loadDraftIfAny();

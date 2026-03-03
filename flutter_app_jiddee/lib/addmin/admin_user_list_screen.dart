@@ -122,9 +122,9 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
                       itemBuilder: (context, i) {
                         final u = filtered[i];
                         final phqRisk = riskFromString(u.phq9RiskLevel);
@@ -134,7 +134,7 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
                         final leadingIcon = phqRisk?.icon ?? Icons.person;
 
                         return InkWell(
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(14),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -144,27 +144,28 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
                             );
                           },
                           child: Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.94),
-                              borderRadius: BorderRadius.circular(22),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: Colors.black.withOpacity(0.05)),
                               boxShadow: [
                                 BoxShadow(
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 10),
-                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                  color: Colors.black.withOpacity(0.04),
                                 ),
                               ],
                             ),
                             child: Row(
                               children: [
+                                // compact avatar with risk color
                                 CircleAvatar(
-                                  radius: 22,
+                                  radius: 18,
                                   backgroundColor: leadingColor.withOpacity(0.16),
-                                  child: Icon(leadingIcon, color: leadingColor),
+                                  child: Icon(leadingIcon, color: leadingColor, size: 20),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 10),
 
                                 Expanded(
                                   child: Column(
@@ -174,44 +175,49 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
                                         u.name.isEmpty ? '(ไม่มีชื่อ)' : u.name,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w900,
-                                          fontSize: 15,
+                                          fontSize: 14,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 4),
 
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
+                                      Row(
                                         children: [
-                                          _pillRisk(
-                                            label: 'PHQ-9',
-                                            risk: phqRisk,
-                                            fallbackText: '-',
-                                            cs: cs,
-                                          ),
-                                          _pillRisk(
-                                            label: 'Deep',
-                                            risk: deepRisk,
-                                            fallbackText: u.hasCompletedDeepAssessment ? '-' : 'ยังไม่ทำ',
-                                            cs: cs,
-                                          ),
-                                          if ((u.phone ?? '').trim().isNotEmpty)
-                                            _pill(
-                                              text: u.phone!.trim(),
-                                              bg: Colors.black.withOpacity(0.06),
-                                              fg: Colors.black.withOpacity(0.70),
-                                              icon: Icons.phone_outlined,
+                                          Flexible(
+                                            child: _pillRisk(
+                                              label: 'PHQ-9',
+                                              risk: phqRisk,
+                                              fallbackText: '-',
+                                              cs: cs,
                                             ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: _pillRisk(
+                                              label: 'Deep',
+                                              risk: deepRisk,
+                                              fallbackText: '-',
+                                              cs: cs,
+                                            ),
+                                          ),
                                         ],
                                       ),
+                                      if ((u.phone ?? '').trim().isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        _pill(
+                                          text: u.phone!.trim(),
+                                          bg: Colors.black.withOpacity(0.04),
+                                          fg: Colors.black.withOpacity(0.55),
+                                          icon: Icons.phone_outlined,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
 
-                                const SizedBox(width: 8),
-                                Icon(Icons.chevron_right, color: Colors.black.withOpacity(0.35)),
+                                const SizedBox(width: 4),
+                                Icon(Icons.chevron_right, size: 20, color: Colors.black.withOpacity(0.30)),
                               ],
                             ),
                           ),
@@ -234,71 +240,63 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.black.withOpacity(0.05)),
         boxShadow: [
           BoxShadow(
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.05),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // title
-          Row(
-            children: const [
-              Icon(Icons.people_alt_outlined),
-              SizedBox(width: 8),
-              Text(
-                'รายชื่อผู้ป่วย',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          // search (compact)
+          SizedBox(
+            height: 42,
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'ค้นหา: ชื่อ / เบอร์ / UID',
+                hintStyle: const TextStyle(fontSize: 13),
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _q.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {});
+                        },
+                      ),
+                filled: true,
+                fillColor: Colors.black.withOpacity(0.03),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: cs.primary.withOpacity(0.55)),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // search
-          TextField(
-            controller: _searchCtrl,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'ค้นหา: ชื่อ / เบอร์ / UID',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _q.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() {});
-                      },
-                    ),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.03),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: cs.primary.withOpacity(0.55)),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
 
-          // filters
+          // filters (compact — single row each)
           _filters(context),
         ],
       ),
@@ -309,35 +307,65 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Filter PHQ-9',
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black.withOpacity(0.75)),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        // PHQ-9 filter row
+        Row(
           children: [
-            _chip('ทั้งหมด', 'all', phqFilter, (v) => setState(() => phqFilter = v)),
-            _chip('เขียว', 'green', phqFilter, (v) => setState(() => phqFilter = v), color: Colors.green),
-            _chip('เหลือง', 'yellow', phqFilter, (v) => setState(() => phqFilter = v), color: Colors.orange),
-            _chip('แดง', 'red', phqFilter, (v) => setState(() => phqFilter = v), color: Colors.red),
+            Text(
+              'PHQ-9',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _chip('ทั้งหมด', 'all', phqFilter, (v) => setState(() => phqFilter = v)),
+                    const SizedBox(width: 4),
+                    _chip('🟢', 'green', phqFilter, (v) => setState(() => phqFilter = v), color: Colors.green),
+                    const SizedBox(width: 4),
+                    _chip('🟡', 'yellow', phqFilter, (v) => setState(() => phqFilter = v), color: Colors.orange),
+                    const SizedBox(width: 4),
+                    _chip('🔴', 'red', phqFilter, (v) => setState(() => phqFilter = v), color: Colors.red),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 12),
-        Text(
-          'Filter Deep',
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black.withOpacity(0.75)),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        const SizedBox(height: 4),
+        // Deep filter row
+        Row(
           children: [
-            _chip('ทั้งหมด', 'all', deepFilter, (v) => setState(() => deepFilter = v)),
-            _chip('เขียว', 'green', deepFilter, (v) => setState(() => deepFilter = v), color: Colors.green),
-            _chip('เหลือง', 'yellow', deepFilter, (v) => setState(() => deepFilter = v), color: Colors.orange),
-            _chip('แดง', 'red', deepFilter, (v) => setState(() => deepFilter = v), color: Colors.red),
+            Text(
+              'Deep  ',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _chip('ทั้งหมด', 'all', deepFilter, (v) => setState(() => deepFilter = v)),
+                    const SizedBox(width: 4),
+                    _chip('🟢', 'green', deepFilter, (v) => setState(() => deepFilter = v), color: Colors.green),
+                    const SizedBox(width: 4),
+                    _chip('🟡', 'yellow', deepFilter, (v) => setState(() => deepFilter = v), color: Colors.orange),
+                    const SizedBox(width: 4),
+                    _chip('🔴', 'red', deepFilter, (v) => setState(() => deepFilter = v), color: Colors.red),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ],
@@ -359,16 +387,21 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onPick(value),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       labelStyle: TextStyle(
         fontWeight: FontWeight.w800,
-        color: selected ? c : Colors.black.withOpacity(0.70),
+        fontSize: 12,
+        color: selected ? c : Colors.black.withOpacity(0.65),
       ),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
       selectedColor: c.withOpacity(0.14),
       backgroundColor: Colors.white,
       side: BorderSide(
-        color: selected ? c.withOpacity(0.40) : Colors.black.withOpacity(0.12),
+        color: selected ? c.withOpacity(0.40) : Colors.black.withOpacity(0.10),
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     );
   }
 
@@ -386,12 +419,25 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
         icon: Icons.remove_circle_outline,
       );
     }
+    // ✅ ใช้ชื่อสั้นแทน risk.label ที่ยาวเกินไป
+    final shortName = _shortRiskName(risk);
     return _pill(
-      text: '$label: ${risk.label}',
+      text: '$label: $shortName',
       bg: risk.color.withOpacity(0.14),
       fg: risk.color,
       icon: risk.icon,
     );
+  }
+
+  String _shortRiskName(RiskLevel risk) {
+    switch (risk) {
+      case RiskLevel.green:
+        return 'ดี';
+      case RiskLevel.yellow:
+        return 'เสี่ยง';
+      case RiskLevel.red:
+        return 'สูง';
+    }
   }
 
   Widget _pill({

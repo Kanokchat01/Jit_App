@@ -19,12 +19,16 @@ class EmotionAggregator {
   final double minMargin;
 
   /// ✅ ใหม่: ทำให้ "neutral" ชนะในเคสก้ำกึ่ง
-  /// ถ้า top1 เป็น sad/fear/angry แต่ neutral ตามมาใกล้ ๆ ภายใน margin นี้ → บังคับ neutral
   final double neutralPreferMargin;
 
   /// ✅ ใหม่: ถ้า topScore ยังไม่สูงมาก (ก้ำกึ่ง) ให้เอียงไป neutral
-  /// (ช่วยแก้เคสหน้านิ่งแต่โมเดลโยนไป sad)
   final double neutralLowConfidenceGate;
+
+  /// ✅ sad ต้องนำ neutral อย่างน้อยค่านี้ ถึงจะแสดง sad
+  final double sadNeutralMinGap;
+
+  /// ✅ ต้องนำ emotion เดิมค่านี้ ถึงจะเปลี่ยน (ลดการกระโดด)
+  final double stickyMargin;
 
   int samples = 0;
   double avgConfidence = 0.0;
@@ -42,10 +46,10 @@ class EmotionAggregator {
     this.maxSamples = 120,
     this.emaAlpha = 0.22,
     this.minMargin = 0.10,
-
-    // ✅ ปรับ 2 ค่านี้เพื่อดัน neutral
-    this.neutralPreferMargin = 0.08,      // ใกล้กันไม่เกินนี้ → neutral ชนะ
-    this.neutralLowConfidenceGate = 0.18, // top EMA ยังต่ำ → ถือว่าไม่ชัด → neutral
+    this.neutralPreferMargin = 0.08,
+    this.neutralLowConfidenceGate = 0.18,
+    this.sadNeutralMinGap = 0.10,
+    this.stickyMargin = 0.05,
   }) {
     reset();
   }
@@ -82,6 +86,28 @@ class EmotionAggregator {
       final v = _ema[k] ?? 0.0;
       final target = (k == label) ? conf : 0.0;
       _ema[k] = v * (1 - emaAlpha) + target * emaAlpha;
+    }
+
+    _updateCurrent();
+  }
+
+  /// ✅ รับ score ของทุก emotion จาก model output (แม่นยำกว่า addSample)
+  void addSampleAll(Map<String, double> scores) {
+    if (scores.isEmpty) return;
+
+    samples = min(samples + 1, maxSamples);
+
+    double topConf = 0.0;
+    for (final entry in scores.entries) {
+      if (entry.value > topConf) topConf = entry.value;
+    }
+    _sumConfidence += topConf;
+    avgConfidence = _sumConfidence / max(1, samples);
+
+    for (final k in _ema.keys) {
+      final prev = _ema[k] ?? 0.0;
+      final target = scores[k] ?? 0.0;
+      _ema[k] = prev * (1 - emaAlpha) + target * emaAlpha;
     }
 
     _updateCurrent();
@@ -146,8 +172,21 @@ class EmotionAggregator {
       return;
     }
 
+    // ✅ sad-neutral disambiguation
+    final disambiguated = _disambiguateSadNeutral(bestL: bestL, bestV: bestV);
+    if (disambiguated != null) {
+      _current = EmotionAggCurrent(disambiguated, _ema[disambiguated] ?? bestV);
+      return;
+    }
+
     // กติกาเดิม: ต้องชนะขาด
     if ((bestV - secondV) < minMargin) return;
+
+    // ✅ Sticky: ถ้ามี emotion เดิมอยู่แล้ว ต้องนำ margin เพิ่ม ถึงจะเปลี่ยน
+    if (_current != null && _current!.label != bestL) {
+      final currentEma = _ema[_current!.label] ?? 0.0;
+      if ((bestV - currentEma) < stickyMargin) return;
+    }
 
     _current = EmotionAggCurrent(bestL, bestV);
   }
@@ -179,6 +218,25 @@ class EmotionAggregator {
       if (secondL == 'neutral' && (bestV - secondV) < (minMargin * 0.7)) {
         return 'neutral';
       }
+    }
+
+    return null;
+  }
+
+  /// ✅ sad ต้องนำ neutral ชัดเจน ถึงจะยืนยันว่า sad จริง
+  String? _disambiguateSadNeutral({
+    required String bestL,
+    required double bestV,
+  }) {
+    if (bestL != 'sad') return null;
+    if (!labels.contains('neutral')) return null;
+
+    final neutralV = _ema['neutral'] ?? 0.0;
+    final sadV = _ema['sad'] ?? 0.0;
+
+    // ถ้า sad นำ neutral ไม่ถึง sadNeutralMinGap → เลือก neutral แทน
+    if ((sadV - neutralV) < sadNeutralMinGap) {
+      return 'neutral';
     }
 
     return null;

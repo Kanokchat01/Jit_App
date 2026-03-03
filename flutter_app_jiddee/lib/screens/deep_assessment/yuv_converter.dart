@@ -12,7 +12,7 @@ import 'package:image/image.dart' as img;
 /// พารามิเตอร์ใหม่:
 /// - camera: CameraDescription (ต้องมีเพื่อรู้ front/back + sensorOrientation)
 /// - deviceOrientation: DeviceOrientation (จาก controller.value.deviceOrientation)
-img.Image? convertYUV420ToImage(
+img.Image? convertCameraImageToImage(
   CameraImage image, {
   bool swapUV = false,
   int downSample = 2,
@@ -33,61 +33,77 @@ img.Image? convertYUV420ToImage(
     final int outW = srcW ~/ downSample;
     final int outH = srcH ~/ downSample;
 
-    final planeY = image.planes[0];
-    final planeU = image.planes[1];
-    final planeV = image.planes[2];
-
-    final Uint8List bytesY = planeY.bytes;
-    final Uint8List bytesU = planeU.bytes;
-    final Uint8List bytesV = planeV.bytes;
-
-    final int yRowStride = planeY.bytesPerRow;
-    final int uvRowStride = planeU.bytesPerRow;
-    final int uvPixelStride = planeU.bytesPerPixel ?? 1;
-
     final out = img.Image(width: outW, height: outH);
 
-    int oy = 0;
-    for (int y = 0; y < srcH; y += downSample, oy++) {
-      final int yRow = yRowStride * y;
-      final int uvRow = uvRowStride * (y >> 1);
-
-      int ox = 0;
-      for (int x = 0; x < srcW; x += downSample, ox++) {
-        final int yIndex = yRow + x;
-        final int uvIndex = uvRow + (x >> 1) * uvPixelStride;
-
-        final int Y = bytesY[yIndex] & 0xFF;
-
-        int U = bytesU[uvIndex] & 0xFF;
-        int V = bytesV[uvIndex] & 0xFF;
-
-        if (swapUV) {
-          final int tmp = U;
-          U = V;
-          V = tmp;
+    if (image.format.group == ImageFormatGroup.bgra8888) {
+      final Uint8List bytes = image.planes[0].bytes;
+      final int bytesPerRow = image.planes[0].bytesPerRow;
+      final int bytesPerPixel = image.planes[0].bytesPerPixel ?? 4;
+      for (int y = 0, oy = 0; y < srcH; y += downSample, oy++) {
+        int rowOffset = y * bytesPerRow;
+        for (int x = 0, ox = 0; x < srcW; x += downSample, ox++) {
+          int offset = rowOffset + x * bytesPerPixel;
+          int b = bytes[offset];
+          int g = bytes[offset + 1];
+          int r = bytes[offset + 2];
+          out.setPixelRgb(ox, oy, r, g, b);
         }
+      }
+    } else {
+      final planeY = image.planes[0];
+      final planeU = image.planes[1];
+      final planeV = image.planes[2];
 
-        // Fast integer YUV->RGB (BT.601-ish)
-        int C = Y - 16;
-        if (C < 0) C = 0;
+      final Uint8List bytesY = planeY.bytes;
+      final Uint8List bytesU = planeU.bytes;
+      final Uint8List bytesV = planeV.bytes;
 
-        final int D = U - 128;
-        final int E = V - 128;
+      final int yRowStride = planeY.bytesPerRow;
+      final int uvRowStride = planeU.bytesPerRow;
+      final int uvPixelStride = planeU.bytesPerPixel ?? 1;
 
-        int R = (298 * C + 409 * E + 128) >> 8;
-        int G = (298 * C - 100 * D - 208 * E + 128) >> 8;
-        int B = (298 * C + 516 * D + 128) >> 8;
+      int oy = 0;
+      for (int y = 0; y < srcH; y += downSample, oy++) {
+        final int yRow = yRowStride * y;
+        final int uvRow = uvRowStride * (y >> 1);
 
-        // clamp 0..255
-        if (R < 0) R = 0;
-        if (R > 255) R = 255;
-        if (G < 0) G = 0;
-        if (G > 255) G = 255;
-        if (B < 0) B = 0;
-        if (B > 255) B = 255;
+        int ox = 0;
+        for (int x = 0; x < srcW; x += downSample, ox++) {
+          final int yIndex = yRow + x;
+          final int uvIndex = uvRow + (x >> 1) * uvPixelStride;
 
-        out.setPixelRgb(ox, oy, R, G, B);
+          final int Y = bytesY[yIndex] & 0xFF;
+
+          int U = bytesU[uvIndex] & 0xFF;
+          int V = bytesV[uvIndex] & 0xFF;
+
+          if (swapUV) {
+            final int tmp = U;
+            U = V;
+            V = tmp;
+          }
+
+          // Fast integer YUV->RGB (BT.601-ish)
+          int C = Y - 16;
+          if (C < 0) C = 0;
+
+          final int D = U - 128;
+          final int E = V - 128;
+
+          int R = (298 * C + 409 * E + 128) >> 8;
+          int G = (298 * C - 100 * D - 208 * E + 128) >> 8;
+          int B = (298 * C + 516 * D + 128) >> 8;
+
+          // clamp 0..255
+          if (R < 0) R = 0;
+          if (R > 255) R = 255;
+          if (G < 0) G = 0;
+          if (G > 255) G = 255;
+          if (B < 0) B = 0;
+          if (B > 255) B = 255;
+
+          out.setPixelRgb(ox, oy, R, G, B);
+        }
       }
     }
 
