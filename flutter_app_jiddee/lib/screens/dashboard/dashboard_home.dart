@@ -45,7 +45,8 @@ class DashboardHome extends StatelessWidget {
     final deepNotDone = needDeep && !deepDone;
 
     final deepIsRed = deepDone && deep == 'red';
-    final canRequestAppointment = deepIsRed;
+    final emotionIsWarning = deepDone && user.happinessLevel == 'warning';
+    final canRequestAppointment = deepIsRed || emotionIsWarning;
     final deepIsYellow = deepDone && deep == 'yellow';
 
     late final String deepText;
@@ -109,7 +110,7 @@ class DashboardHome extends StatelessWidget {
                 _newsHighlight(context),
 
                 const SizedBox(height: 18),
-                _quickActions(context, canRequestAppointment),
+                _quickActions(context, canRequestAppointment, deepDone),
 
                 if (deepNotDone || deepIsYellow) ...[
                   const SizedBox(height: 18),
@@ -557,7 +558,7 @@ class DashboardHome extends StatelessWidget {
     );
   }
 
-  Widget _quickActions(BuildContext context, bool canRequestAppointment) {
+  Widget _quickActions(BuildContext context, bool canRequestAppointment, bool deepDone) {
     return Row(
       children: [
         Expanded(
@@ -590,12 +591,20 @@ class DashboardHome extends StatelessWidget {
             context: context,
             icon: Icons.calendar_month,
             title: "นัดแพทย์",
-            subtitle: canRequestAppointment ? "ส่งคำขอ" : "ทำ Deep ก่อน",
+            subtitle: canRequestAppointment
+                ? "ส่งคำขอ"
+                : deepDone
+                    ? "ผลยังไม่ถึงเกณฑ์นัดหมอ"
+                    : "ทำ Deep ก่อน",
             onTap: () {
               if (!canRequestAppointment) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("ต้องทำแบบสอบถามเชิงลึก และผลเป็นสีแดงก่อน"),
+                  SnackBar(
+                    content: Text(
+                      deepDone
+                          ? "ผลประเมินยังไม่ถึงเกณฑ์ (ต้องเป็นสีแดง หรือ คะแนนอารมณ์อยู่ในระดับเสี่ยง)"
+                          : "ต้องทำแบบสอบถามเชิงลึก (TMHI-55) ก่อน",
+                    ),
                   ),
                 );
                 return;

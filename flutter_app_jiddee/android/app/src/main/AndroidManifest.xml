@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="flutter_app_jiddee"
+        android:label="JitDee"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
