@@ -249,9 +249,8 @@ class NotificationService {
                 );
               }
             }
-
             // 🔔 ใกล้ถึงวันนัด
-            if (dt != null && (status == 'approved' || status == 'confirmed')) {
+            /*if (dt != null && (status == 'approved' || status == 'confirmed')) {
               final diff = dt.difference(DateTime.now());
               final alreadyNotified = _nearDueNotifiedByApptId[apptId] ?? false;
 
@@ -268,7 +267,25 @@ class NotificationService {
                   refId: apptId,
                 );
               }
-            }
+            }*/
+            if (dt != null && (status == 'approved' || status == 'confirmed')) {
+                final diff = dt.difference(DateTime.now());
+                final alreadyNotified = _nearDueNotifiedByApptId[apptId] ?? false;
+
+                if (!alreadyNotified &&
+                    diff.inMinutes <= 2 &&
+                    diff.inMinutes > 0) {
+                  _nearDueNotifiedByApptId[apptId] = true;
+
+                  showLocal(
+                    title: 'ใกล้ถึงวันนัดแพทย์',
+                    body: 'อีกประมาณ ${diff.inMinutes} นาที จะถึงเวลานัดแล้ว',
+                    payload: 'appointment:$apptId',
+                    type: 'appointment',
+                    refId: apptId,
+                  );
+                }
+              }
           }
         });
   }

@@ -265,7 +265,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     );
   }
 
-  Widget _emotionDebugCard() {
+  /*Widget _emotionDebugCard() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
@@ -310,7 +310,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
         ],
       ),
     );
-  }
+  }*/
 
   // =========================
   // Draft: Load / Save / Clear
@@ -567,8 +567,6 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                                 });
                               },
                               ),
-                              const SizedBox(height: 10),
-                              _emotionDebugCard(),
                             ],
                           )
                         : _aiLoadingCard(),
@@ -1062,32 +1060,15 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
                     ),
                   ],
                 ),
-                if (_useCamera) ...[
+
+                // ✅ Happiness Score Badge
+                if (_useCamera && emotionSamples >= emotionMinSamplesToReport && hLevel.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  Text(
-                    'Emotion (On-device): samples=$emotionSamples • conf=${emotionAvgConf.toStringAsFixed(2)}',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    (summaryPercent.isEmpty)
-                        ? (lowSamples
-                            ? 'ยังเก็บข้อมูลอารมณ์ได้น้อย/ไม่พอ (ลองให้หน้าชัดขึ้น/อยู่ในกรอบกล้อง 5–10 วินาที)'
-                            : 'ไม่พบข้อมูลอารมณ์ (อาจเกิดจากกล้องมืด/หน้าไม่ชัด/สีเพี้ยน)')
-                        : ([
-                            if (dominantEmotion.isNotEmpty)
-                              'Dominant: $dominantEmotion (${(dominantScore * 100).toStringAsFixed(0)}%)',
-                            summaryPercent.entries
-                                .map((e) =>
-                                    '${e.key}:${e.value.toStringAsFixed(0)}%')
-                                .join('  |  ')
-                          ]).join('\n'),
-                    maxLines: 6,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  _buildHappinessBadge(hScore, hLevel),
                 ],
+
                 const SizedBox(height: 10),
                 Text(
                   result.level == 'red'
@@ -1115,5 +1096,169 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  // =========================
+  // ✅ Happiness Score Badge (for result dialog)
+  // =========================
+
+  Color _happinessColor(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'good':
+        return Colors.green;
+      case 'normal':
+        return Colors.amber.shade700;
+      case 'monitor':
+        return Colors.orange;
+      case 'warning':
+        return Colors.red;
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  String _happinessEmoji(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'good':
+        return '😊';
+      case 'normal':
+        return '🙂';
+      case 'monitor':
+        return '😐';
+      case 'warning':
+        return '😟';
+      default:
+        return '🤔';
+    }
+  }
+
+  String _happinessLevelLabel(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'good':
+        return 'ดี';
+      case 'normal':
+        return 'ปกติ';
+      case 'monitor':
+        return 'ควรติดตาม';
+      case 'warning':
+        return 'เฝ้าระวัง';
+      default:
+        return '-';
+    }
+  }
+
+  Widget _buildHappinessBadge(double score, String level) {
+    final color = _happinessColor(level);
+    final emoji = _happinessEmoji(level);
+    final label = _happinessLevelLabel(level);
+    final normalized = ((score + 2.0) / 4.0).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.insights, size: 18, color: color),
+              const SizedBox(width: 8),
+              Text(
+                'คะแนนความสุข',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  color: Colors.black.withOpacity(0.72),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: color.withOpacity(0.22)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                '${score >= 0 ? "+" : ""}${score.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                  color: color,
+                ),
+              ),
+              Text(
+                ' / 2.00',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.45),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              height: 10,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: normalized,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withOpacity(0.70),
+                        color,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'น้ำหนัก: โกรธ(-2)  กลัว(-1.5)  เศร้า(-2)  ปกติ(+0.5)  สุข(+2)',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.black.withOpacity(0.40),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
