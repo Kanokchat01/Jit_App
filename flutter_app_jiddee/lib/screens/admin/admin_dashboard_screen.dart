@@ -23,6 +23,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   static const String _channelId = 'admin_channel';
   static const String _channelName = 'Admin Notifications';
 
+  /// ป้องกัน popup notification เก่าตอนเปิดแอป
+  bool _firstSnapshot = true;
+
   @override
   void initState() {
     super.initState();
@@ -59,13 +62,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // ===============================
-  // 🔥 LISTEN FIRESTORE → เด้งนอกแอพ
+  // 🔥 LISTEN FIRESTORE → เด้งเฉพาะอันใหม่
   // ===============================
   void _listenAdminNotifications() {
     _adminSub = FirebaseFirestore.instance
         .collection('admin_notifications')
+        .where('read', isEqualTo: false)
+        .orderBy('createdAt', descending: true)
+        .limit(10)
         .snapshots()
         .listen((snapshot) {
+      // snapshot แรก → แสดงเฉพาะอันล่าสุด 1 ตัว ที่เหลือจำ id ไว้ไม่ popup
+      if (_firstSnapshot) {
+        _firstSnapshot = false;
+
+        for (int i = 0; i < snapshot.docs.length; i++) {
+          final doc = snapshot.docs[i];
+          _shownIds.add(doc.id);
+
+          // แสดง popup เฉพาะตัวแรก (ล่าสุด) เท่านั้น
+          if (i == 0) {
+            final data = doc.data();
+            _local.show(
+              DateTime.now().millisecondsSinceEpoch.remainder(100000),
+              data['title'] ?? 'แจ้งเตือน',
+              data['body'] ?? '',
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  _channelId,
+                  _channelName,
+                  importance: Importance.max,
+                  priority: Priority.high,
+                ),
+              ),
+            );
+          }
+        }
+        return;
+      }
+
+      // snapshot ถัดไป → แสดงทุกตัวที่ยังไม่เคย popup
       for (final doc in snapshot.docs) {
         if (!_shownIds.contains(doc.id)) {
           _shownIds.add(doc.id);

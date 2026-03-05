@@ -184,14 +184,35 @@ class NotificationService {
   // =====================================================
   // APPOINTMENT REALTIME LISTENER
   // =====================================================
+  bool _apptFirstSnapshot = true;
+
   void _listenAppointmentStatus(String uid) {
     _apptSub?.cancel();
+    _apptFirstSnapshot = true;
 
     _apptSub = _db
         .collection('appointments')
         .where('patientUid', isEqualTo: uid)
         .snapshots()
         .listen((qs) {
+          // snapshot แรก → จำ status ไว้เฉยๆ ไม่สร้าง notification
+          if (_apptFirstSnapshot) {
+            _apptFirstSnapshot = false;
+            for (final d in qs.docs) {
+              final data = d.data();
+              final apptId = d.id;
+              final status = (data['status'] ?? '').toString().toLowerCase();
+              _lastStatusByApptId[apptId] = status;
+
+              DateTime? dt;
+              final apptAt = data['appointmentAt'];
+              if (apptAt is Timestamp) dt = apptAt.toDate();
+              final millis = dt?.millisecondsSinceEpoch;
+              if (millis != null) _lastApptAtMillisById[apptId] = millis;
+            }
+            return;
+          }
+
           for (final d in qs.docs) {
             final data = d.data();
             final apptId = d.id;
@@ -249,8 +270,8 @@ class NotificationService {
                 );
               }
             }
-            // 🔔 ใกล้ถึงวันนัด
-            /*if (dt != null && (status == 'approved' || status == 'confirmed')) {
+            // 🔔 ใกล้ถึงวันนัด (24 ชม.)
+            if (dt != null && (status == 'approved' || status == 'confirmed')) {
               final diff = dt.difference(DateTime.now());
               final alreadyNotified = _nearDueNotifiedByApptId[apptId] ?? false;
 
@@ -267,25 +288,7 @@ class NotificationService {
                   refId: apptId,
                 );
               }
-            }*/
-            if (dt != null && (status == 'approved' || status == 'confirmed')) {
-                final diff = dt.difference(DateTime.now());
-                final alreadyNotified = _nearDueNotifiedByApptId[apptId] ?? false;
-
-                if (!alreadyNotified &&
-                    diff.inMinutes <= 2 &&
-                    diff.inMinutes > 0) {
-                  _nearDueNotifiedByApptId[apptId] = true;
-
-                  showLocal(
-                    title: 'ใกล้ถึงวันนัดแพทย์',
-                    body: 'อีกประมาณ ${diff.inMinutes} นาที จะถึงเวลานัดแล้ว',
-                    payload: 'appointment:$apptId',
-                    type: 'appointment',
-                    refId: apptId,
-                  );
-                }
-              }
+            }
           }
         });
   }
@@ -305,20 +308,53 @@ class NotificationService {
   StreamSubscription? _adminSub;
 
   final Set<String> _notifiedAdminIds = {};
+  bool _adminFirstSnapshot = true;
 
   void listenAdminAppointments() {
     _adminSub?.cancel();
+    _adminFirstSnapshot = true;
 
     _adminSub = FirebaseFirestore.instance
         .collection('admin_notifications')
         .where('read', isEqualTo: false)
+        .orderBy('createdAt', descending: true)
+        .limit(10)
         .snapshots()
         .listen((snapshot) {
+          // snapshot แรก → แสดงเฉพาะตัวล่าสุด 1 ตัว ที่เหลือจำ id ไว้
+          if (_adminFirstSnapshot) {
+            _adminFirstSnapshot = false;
+
+            for (int i = 0; i < snapshot.docs.length; i++) {
+              final doc = snapshot.docs[i];
+              _notifiedAdminIds.add(doc.id);
+
+              // แสดง popup เฉพาะตัวแรก (ล่าสุด)
+              if (i == 0) {
+                _local.show(
+                  DateTime.now().millisecondsSinceEpoch.remainder(100000),
+                  doc['title'] ?? 'แจ้งเตือนแอดมิน',
+                  doc['body'] ?? 'มีคำขอนัดหมายใหม่',
+                  const NotificationDetails(
+                    android: AndroidNotificationDetails(
+                      _channelId,
+                      _channelName,
+                      channelDescription: _channelDesc,
+                      importance: Importance.max,
+                      priority: Priority.high,
+                    ),
+                  ),
+                );
+              }
+            }
+            return;
+          }
+
+          // snapshot ถัดไป → แสดงทุกตัวใหม่
           for (final doc in snapshot.docs) {
             if (!_notifiedAdminIds.contains(doc.id)) {
               _notifiedAdminIds.add(doc.id);
 
-              // 🔔 แสดงอย่างเดียว ไม่ต้อง save ซ้ำ
               _local.show(
                 DateTime.now().millisecondsSinceEpoch.remainder(100000),
                 doc['title'] ?? 'แจ้งเตือนแอดมิน',

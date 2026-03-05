@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/app_user.dart';
 import '../../models/risk_level.dart';
 import '../../gates/auth_gate.dart';
+import '../../services/firestore_service.dart';
 
 import '../patient/phq9_screen.dart';
 import '../patient/appointment_screen.dart';
@@ -139,6 +140,160 @@ class DashboardHome extends StatelessWidget {
                   subtitle: deepText,
                   icon: deepIcon,
                   color: deepColor,
+                ),
+
+                const SizedBox(height: 12),
+
+                // ✅ สถานะนัดหมายล่าสุด
+                StreamBuilder<Map<String, dynamic>?>(
+                  stream: FirestoreService().watchActiveAppointment(user.uid),
+                  builder: (context, apptSnap) {
+                    if (apptSnap.connectionState == ConnectionState.waiting) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final appt = apptSnap.data;
+                    if (appt == null) return const SizedBox.shrink();
+
+                    final status = (appt['status'] ?? '').toString().toLowerCase();
+                    final apptAt = appt['appointmentAt'];
+                    DateTime? dt;
+                    if (apptAt is Timestamp) dt = apptAt.toDate();
+
+                    String dateStr = '-';
+                    if (dt != null) {
+                      dateStr = '${dt.day}/${dt.month}/${dt.year} '
+                          '${dt.hour.toString().padLeft(2, '0')}:'
+                          '${dt.minute.toString().padLeft(2, '0')} น.';
+                    }
+
+                    final String statusLabel;
+                    final Color statusColor;
+                    final IconData statusIcon;
+
+                    switch (status) {
+                      case 'approved':
+                      case 'confirmed':
+                        statusLabel = 'อนุมัติแล้ว';
+                        statusColor = Colors.green;
+                        statusIcon = Icons.check_circle;
+                        break;
+                      case 'rejected':
+                        statusLabel = 'ถูกปฏิเสธ';
+                        statusColor = Colors.red;
+                        statusIcon = Icons.cancel;
+                        break;
+                      default:
+                        statusLabel = 'รออนุมัติ';
+                        statusColor = Colors.orange;
+                        statusIcon = Icons.hourglass_top;
+                    }
+
+                    final adminNote = (appt['adminNote'] ?? '').toString().trim();
+
+                    return Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        color: Colors.white.withOpacity(0.92),
+                        boxShadow: [
+                          BoxShadow(
+                            blurRadius: 22,
+                            color: Colors.black.withOpacity(.06),
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                        border: Border.all(color: Colors.black.withOpacity(0.04)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: statusColor.withOpacity(.15),
+                                child: Icon(statusIcon, color: statusColor),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'นัดหมายแพทย์',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'วันนัด: $dateStr',
+                                      style: TextStyle(
+                                        color: Colors.black.withOpacity(.68),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: statusColor.withOpacity(0.22),
+                                  ),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    color: statusColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (adminNote.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.03),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.note_alt_outlined,
+                                    size: 16,
+                                    color: Colors.black.withOpacity(0.45),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      adminNote,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.black.withOpacity(0.60),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

@@ -1167,36 +1167,42 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
             children: [
               Icon(Icons.insights, size: 18, color: color),
               const SizedBox(width: 8),
-              Text(
-                'คะแนนความสุข',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                  color: Colors.black.withOpacity(0.72),
+              Expanded(
+                child: Text(
+                  'คะแนนความสุข',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: Colors.black.withOpacity(0.72),
+                  ),
                 ),
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: color.withOpacity(0.22)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(emoji, style: const TextStyle(fontSize: 14)),
-                    const SizedBox(width: 4),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        color: color,
+              const SizedBox(width: 6),
+              Flexible(
+                flex: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: color.withOpacity(0.22)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: color,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
