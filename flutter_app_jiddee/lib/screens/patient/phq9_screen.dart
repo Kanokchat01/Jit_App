@@ -83,7 +83,7 @@ class _Phq9ScreenState extends State<Phq9Screen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             children: [
-              _scoreHero(context),
+              _progressCard(context),
               const SizedBox(height: 16),
 
               _sectionTitle(context, "ตอบคำถามให้ครบ 9 ข้อ"),
@@ -111,135 +111,70 @@ class _Phq9ScreenState extends State<Phq9Screen> {
   // UI Widgets (ตกแต่งเท่านั้น)
   // =========================
 
-  Widget _scoreHero(BuildContext context) {
+  int get _answeredCount => answers.where((a) => a != null).length;
+
+  Widget _progressCard(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final answered = _answeredCount;
+    final total = questions.length;
+    final double progress = total == 0 ? 0 : answered / total;
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: Colors.white.withOpacity(0.78),
-        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
         boxShadow: [
           BoxShadow(
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          children: [
-            // bubbles background
-            Positioned(
-              right: -60,
-              top: -60,
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: cs.secondary.withOpacity(0.18),
-                ),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          // 🐳 Mascot
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
             ),
-            Positioned(
-              left: -70,
-              bottom: -80,
-              child: Container(
-                width: 220,
-                height: 220,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: cs.primary.withOpacity(0.10),
-                ),
-              ),
-            ),
+            padding: const EdgeInsets.all(8),
+            child: Image.asset(_mascotAsset),
+          ),
+          const SizedBox(width: 16),
 
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(Icons.analytics_outlined, color: cs.primary),
+          // 📊 Progress
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ตอบแล้ว $answered / $total ข้อ',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black.withOpacity(0.8),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "คะแนนรวมปัจจุบัน",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black.withOpacity(0.78),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.primary.withOpacity(0.14),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: cs.primary.withOpacity(0.20),
-                                ),
-                              ),
-                              child: Text(
-                                "${_total}",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  color: cs.primary.withOpacity(0.95),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              "จาก 27 คะแนน",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black.withOpacity(0.55),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                   ),
-
-                  // mascot
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        _mascotAsset,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

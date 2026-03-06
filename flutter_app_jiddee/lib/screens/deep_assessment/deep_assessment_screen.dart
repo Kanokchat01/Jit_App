@@ -498,27 +498,7 @@ class _DeepAssessmentScreenState extends State<DeepAssessmentScreen> {
               if (ok && mounted) Navigator.pop(context);
             },
           ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: TextButton.icon(
-                onPressed: _saving ? null : _saveAndExit,
-                style: TextButton.styleFrom(
-                  backgroundColor: cs.primary.withOpacity(0.10),
-                  foregroundColor: cs.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                ),
-                icon: const Icon(Icons.save_alt),
-                label: const Text(
-                  'บันทึกแล้วกลับ',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ),
-          ],
+          actions: [],
         ),
         body: Container(
           decoration: BoxDecoration(
