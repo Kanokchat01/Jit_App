@@ -2,7 +2,11 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   NotificationService._();
@@ -25,12 +29,22 @@ class NotificationService {
   StreamSubscription<RemoteMessage>? _onMessageOpenedSub;
 
   final Map<String, String> _lastStatusByApptId = {};
-  final Map<String, bool> _nearDueNotifiedByApptId = {};
   final Map<String, int> _lastApptAtMillisById = {};
+
+  /// เก็บว่าแจ้งเตือนจุดไหนไปแล้วบ้าง per apptId
+  /// key = "apptId:hours", value = true (already notified)
+  final Map<String, bool> _reminderFired = {};
+
+  Timer? _reminderTimer;
 
   final StreamController<String?> _tapController =
       StreamController<String?>.broadcast();
   Stream<String?> get onTapStream => _tapController.stream;
+
+  // =====================================================
+  // ⏰ REMINDER CONFIG: 3 จุด (24h / 8h / 2h ก่อนนัด)
+  // =====================================================
+  static const List<int> _reminderHours = [24, 8, 2];
 
   // =====================================================
   // INIT
@@ -39,6 +53,7 @@ class NotificationService {
     _currentUid = uid;
 
     if (!_inited) {
+      await _initTimeZone();
       await _initLocalNotifications();
       await _initFCMListeners();
       _inited = true;
@@ -53,6 +68,22 @@ class NotificationService {
     await _apptSub?.cancel();
     await _tokenSub?.cancel();
     await _onMessageOpenedSub?.cancel();
+    _reminderTimer?.cancel();
+  }
+
+  // =====================================================
+  // TIMEZONE INIT
+  // =====================================================
+  Future<void> _initTimeZone() async {
+    tz.initializeTimeZones();
+    try {
+      final tzName = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(tzName));
+      debugPrint('[NotifService] ⏰ Timezone: $tzName');
+    } catch (_) {
+      tz.setLocalLocation(tz.getLocation('Asia/Bangkok'));
+      debugPrint('[NotifService] ⏰ Timezone fallback: Asia/Bangkok');
+    }
   }
 
   // =====================================================
@@ -121,6 +152,16 @@ class NotificationService {
   // =====================================================
   Future<void> _requestPermission() async {
     await _fcm.requestPermission(alert: true, badge: true, sound: true);
+
+    final androidPlugin = _local
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin != null) {
+      await androidPlugin.requestExactAlarmsPermission();
+      await androidPlugin.requestNotificationsPermission();
+      debugPrint('[NotifService] ✅ Requested exact alarm + notification permissions');
+    }
   }
 
   Future<void> _saveFcmToken(String uid) async {
@@ -182,6 +223,157 @@ class NotificationService {
   }
 
   // =====================================================
+  // ⏰ REMINDER ENGINE (Timer.periodic — ทำงานขณะเปิดแอป)
+  // =====================================================
+
+  /// เริ่ม Timer เช็คทุก 30 วินาที
+  void _startReminderTimer() {
+    _reminderTimer?.cancel();
+    _reminderTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkAllReminders();
+    });
+    // เช็ครอบแรกทันที
+    _checkAllReminders();
+  }
+
+  /// ตอนเจอนัดหมาย approved ครั้งแรก → mark จุดที่ "เวลาแจ้งเตือน" ผ่านไปแล้ว
+  /// เช่น นัด 20:00, ตอนนี้ 17:00 (เหลือ 3 ชม.)
+  ///   - จุด 24h → เวลาแจ้ง = 20:00 - 24h = เมื่อวาน → ผ่านไปแล้ว → mark fired
+  ///   - จุด 8h  → เวลาแจ้ง = 20:00 - 8h  = 12:00     → ผ่านไปแล้ว → mark fired
+  ///   - จุด 2h  → เวลาแจ้ง = 20:00 - 2h  = 18:00     → ยังไม่ถึง  → ปล่อยให้ timer เด้ง
+  void _markPastRemindersAsFired(String apptId, DateTime appointmentAt) {
+    final now = DateTime.now();
+
+    for (final hours in _reminderHours) {
+      final key = '$apptId:$hours';
+      // เวลาที่ควรแจ้งเตือนของจุดนี้
+      final fireTime = appointmentAt.subtract(Duration(hours: hours));
+
+      if (fireTime.isBefore(now)) {
+        // เวลาแจ้งผ่านไปแล้ว → mark ว่าเด้งไปแล้ว (ไม่เด้งย้อนหลัง)
+        _reminderFired[key] = true;
+        debugPrint('[NotifService] ⏭️ MARK PAST: ${hours}h (fireTime=$fireTime already passed)');
+      }
+    }
+  }
+
+  /// วนเช็คนัดหมายทุกตัว — เด้งเฉพาะตอนเวลาข้ามจุดพอดี
+  void _checkAllReminders() {
+    final now = DateTime.now();
+
+    for (final apptId in _lastApptAtMillisById.keys) {
+      final status = _lastStatusByApptId[apptId] ?? '';
+      if (status != 'approved' && status != 'confirmed') continue;
+
+      final millis = _lastApptAtMillisById[apptId]!;
+      final appointmentAt = DateTime.fromMillisecondsSinceEpoch(millis);
+
+      // ข้ามนัดหมายที่เวลาผ่านไปแล้ว
+      if (appointmentAt.isBefore(now)) continue;
+
+      for (final hours in _reminderHours) {
+        final key = '$apptId:$hours';
+        if (_reminderFired[key] == true) continue;
+
+        // เวลาที่ควรแจ้งเตือนของจุดนี้
+        final fireTime = appointmentAt.subtract(Duration(hours: hours));
+
+        // ถ้าถึงเวลาแจ้งแล้ว (now >= fireTime) → เด้ง!
+        if (now.isAfter(fireTime) || now.isAtSameMomentAs(fireTime)) {
+          _reminderFired[key] = true;
+
+          String bodyText;
+          if (hours >= 24) {
+            bodyText = 'อีก 1 วัน จะถึงเวลานัดแพทย์แล้ว กรุณาเตรียมตัว';
+          } else {
+            bodyText = 'อีก $hours ชั่วโมง จะถึงเวลานัดแพทย์แล้ว';
+          }
+
+          debugPrint('[NotifService] 🔔 FIRING ${hours}h reminder for $apptId');
+
+          showLocal(
+            title: '🔔 ใกล้ถึงวันนัดแพทย์',
+            body: bodyText,
+            payload: 'appointment:$apptId',
+            type: 'appointment',
+            refId: apptId,
+          );
+        }
+      }
+    }
+  }
+
+  // =====================================================
+  // ⏰ BACKGROUND SCHEDULE (zonedSchedule — แม้ปิดแอป)
+  // =====================================================
+
+  int _reminderId(String apptId, int index) {
+    return (apptId.hashCode.abs() * 10 + index) % 2147483647;
+  }
+
+  Future<void> _scheduleAppointmentReminders(
+    String apptId,
+    DateTime appointmentAt,
+  ) async {
+    await _cancelAppointmentReminders(apptId);
+
+    final now = DateTime.now();
+    debugPrint('[NotifService] 📅 zonedSchedule for appt=$apptId at=$appointmentAt');
+
+    for (int i = 0; i < _reminderHours.length; i++) {
+      final hours = _reminderHours[i];
+      final reminderTime = appointmentAt.subtract(Duration(hours: hours));
+
+      if (reminderTime.isBefore(now)) {
+        debugPrint('[NotifService]    ❌ SKIP ${hours}h (past)');
+        continue;
+      }
+
+      final tzTime = tz.TZDateTime.from(reminderTime, tz.local);
+      final id = _reminderId(apptId, i);
+
+      String bodyText;
+      if (hours >= 24) {
+        bodyText = 'อีก 1 วัน จะถึงเวลานัดแพทย์แล้ว กรุณาเตรียมตัว';
+      } else {
+        bodyText = 'อีก $hours ชั่วโมง จะถึงเวลานัดแพทย์แล้ว';
+      }
+
+      try {
+        await _local.zonedSchedule(
+          id,
+          '🔔 ใกล้ถึงวันนัดแพทย์',
+          bodyText,
+          tzTime,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              _channelId,
+              _channelName,
+              channelDescription: _channelDesc,
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
+          ),
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          payload: 'appointment:$apptId',
+          matchDateTimeComponents: null,
+        );
+        debugPrint('[NotifService]    ✅ SCHEDULED ${hours}h at $tzTime');
+      } catch (e) {
+        debugPrint('[NotifService]    ❌ zonedSchedule error: $e');
+      }
+    }
+  }
+
+  Future<void> _cancelAppointmentReminders(String apptId) async {
+    for (int i = 0; i < _reminderHours.length; i++) {
+      await _local.cancel(_reminderId(apptId, i));
+    }
+  }
+
+  // =====================================================
   // APPOINTMENT REALTIME LISTENER
   // =====================================================
   bool _apptFirstSnapshot = true;
@@ -190,12 +382,14 @@ class NotificationService {
     _apptSub?.cancel();
     _apptFirstSnapshot = true;
 
+    // ✅ เริ่ม Timer เช็คทุก 30 วินาที (ทำงานขณะเปิดแอป)
+    _startReminderTimer();
+
     _apptSub = _db
         .collection('appointments')
         .where('patientUid', isEqualTo: uid)
         .snapshots()
         .listen((qs) {
-          // snapshot แรก → จำ status ไว้เฉยๆ ไม่สร้าง notification
           if (_apptFirstSnapshot) {
             _apptFirstSnapshot = false;
             for (final d in qs.docs) {
@@ -209,7 +403,27 @@ class NotificationService {
               if (apptAt is Timestamp) dt = apptAt.toDate();
               final millis = dt?.millisecondsSinceEpoch;
               if (millis != null) _lastApptAtMillisById[apptId] = millis;
+
+              // โหลดสถานะ fired จาก Firestore
+              final firedList = data['remindersFired'];
+              if (firedList is List) {
+                for (final h in firedList) {
+                  _reminderFired['$apptId:$h'] = true;
+                }
+              }
+
+              // schedule background (zonedSchedule) สำหรับตอนปิดแอป
+              if (dt != null &&
+                  dt.isAfter(DateTime.now()) &&
+                  (status == 'approved' || status == 'confirmed')) {
+                // ✅ mark จุดที่เวลาผ่านไปแล้ว ไม่ต้องเด้งย้อนหลัง
+                _markPastRemindersAsFired(apptId, dt);
+                _scheduleAppointmentReminders(apptId, dt);
+              }
             }
+
+            // เช็ครอบแรกทันที
+            _checkAllReminders();
             return;
           }
 
@@ -226,7 +440,15 @@ class NotificationService {
             if (millis != null) {
               final oldMillis = _lastApptAtMillisById[apptId];
               if (oldMillis != null && oldMillis != millis) {
-                _nearDueNotifiedByApptId[apptId] = false;
+                // เปลี่ยนเวลานัด → รีเซ็ต fired + re-schedule
+                _cancelAppointmentReminders(apptId);
+                for (final h in _reminderHours) {
+                  _reminderFired['$apptId:$h'] = false;
+                }
+                if (dt!.isAfter(DateTime.now()) &&
+                    (status == 'approved' || status == 'confirmed')) {
+                  _scheduleAppointmentReminders(apptId, dt);
+                }
               }
               _lastApptAtMillisById[apptId] = millis;
             }
@@ -255,6 +477,15 @@ class NotificationService {
                   type: 'appointment',
                   refId: apptId,
                 );
+
+                // ✅ Schedule background + mark จุดที่ผ่านไปแล้ว
+                if (dt != null && dt.isAfter(DateTime.now())) {
+                  _markPastRemindersAsFired(apptId, dt);
+                  _scheduleAppointmentReminders(apptId, dt);
+                }
+
+                // เช็คทันทีเลยหลัง approve
+                _checkAllReminders();
               }
 
               if (status == 'rejected') {
@@ -268,25 +499,11 @@ class NotificationService {
                   type: 'appointment',
                   refId: apptId,
                 );
+                _cancelAppointmentReminders(apptId);
               }
-            }
-            // 🔔 ใกล้ถึงวันนัด (24 ชม.)
-            if (dt != null && (status == 'approved' || status == 'confirmed')) {
-              final diff = dt.difference(DateTime.now());
-              final alreadyNotified = _nearDueNotifiedByApptId[apptId] ?? false;
 
-              if (!alreadyNotified &&
-                  diff.inHours <= 24 &&
-                  diff.inMinutes > 0) {
-                _nearDueNotifiedByApptId[apptId] = true;
-
-                showLocal(
-                  title: 'ใกล้ถึงวันนัดแพทย์',
-                  body: 'อีกประมาณ ${diff.inHours} ชั่วโมง จะถึงเวลานัดแล้ว',
-                  payload: 'appointment:$apptId',
-                  type: 'appointment',
-                  refId: apptId,
-                );
+              if (status == 'cancelled' || status == 'completed') {
+                _cancelAppointmentReminders(apptId);
               }
             }
           }
@@ -295,8 +512,6 @@ class NotificationService {
 
   void scheduleDeepReminderTest({required String uid}) {
     Timer(const Duration(minutes: 1), () async {
-      //แจ้ง1นาที
-      /*Timer(const Duration(days: 3), () async {*/ //แจ้ง3วัน
       await showLocal(
         title: 'แจ้งเตือนประเมินซ้ำ',
         body: 'กรุณากลับมาทำแบบประเมินเชิงลึกอีกครั้ง',
@@ -321,36 +536,16 @@ class NotificationService {
         .limit(10)
         .snapshots()
         .listen((snapshot) {
-          // snapshot แรก → แสดงเฉพาะตัวล่าสุด 1 ตัว ที่เหลือจำ id ไว้
           if (_adminFirstSnapshot) {
             _adminFirstSnapshot = false;
 
             for (int i = 0; i < snapshot.docs.length; i++) {
               final doc = snapshot.docs[i];
               _notifiedAdminIds.add(doc.id);
-
-              // แสดง popup เฉพาะตัวแรก (ล่าสุด)
-              if (i == 0) {
-                _local.show(
-                  DateTime.now().millisecondsSinceEpoch.remainder(100000),
-                  doc['title'] ?? 'แจ้งเตือนแอดมิน',
-                  doc['body'] ?? 'มีคำขอนัดหมายใหม่',
-                  const NotificationDetails(
-                    android: AndroidNotificationDetails(
-                      _channelId,
-                      _channelName,
-                      channelDescription: _channelDesc,
-                      importance: Importance.max,
-                      priority: Priority.high,
-                    ),
-                  ),
-                );
-              }
             }
             return;
           }
 
-          // snapshot ถัดไป → แสดงทุกตัวใหม่
           for (final doc in snapshot.docs) {
             if (!_notifiedAdminIds.contains(doc.id)) {
               _notifiedAdminIds.add(doc.id);

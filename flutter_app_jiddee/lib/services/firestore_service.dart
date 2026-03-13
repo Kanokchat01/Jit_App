@@ -340,6 +340,20 @@ class FirestoreService {
       'updatedAtServer': FieldValue.serverTimestamp(),
       'updatedAt': Timestamp.now(),
     }, SetOptions(merge: true));
+
+    // ✅ อัปเดตสถานะการแจ้งเตือนของแอดมินเป็น "อ่านแล้ว" เพื่อไม่ให้เด้งซ้ำ
+    if (status.toLowerCase() != 'pending') {
+      try {
+        final q = await _db
+            .collection('admin_notifications')
+            .where('appointmentId', isEqualTo: appointmentId)
+            .where('read', isEqualTo: false)
+            .get();
+        for (final doc in q.docs) {
+          await doc.reference.update({'read': true});
+        }
+      } catch (_) {}
+    }
   }
 
   // =========================
